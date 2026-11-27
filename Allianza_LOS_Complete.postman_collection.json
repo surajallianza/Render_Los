@@ -1,0 +1,595 @@
+{
+	"info": {
+		"_postman_id": "c7a810f2-5ef8-4de3-b26a-9b16b47c94fa",
+		"name": "Allianza LOS - Complete API Collection",
+		"description": "Comprehensive Postman collection for Allianza Loan Origination System (LOS) including Bank Setup, Master Lookups Management, and Form Consumer Dropdowns.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "bankId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "bankCode",
+			"value": "ABC001",
+			"type": "string"
+		},
+		{
+			"key": "lookupId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "lookupCode",
+			"value": "10004",
+			"type": "string"
+		},
+		{
+			"key": "subLookupId",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "subLookupCode",
+			"value": "1",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "01. Bank Setup & Onboarding",
+			"item": [
+				{
+					"name": "1. Initialize Bank (Full Payload)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.bankId) {",
+									"    pm.collectionVariables.set('bankId', jsonData.data.bankId);",
+									"}",
+									"if (jsonData.data && jsonData.data.bankCode) {",
+									"    pm.collectionVariables.set('bankCode', jsonData.data.bankCode);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"bank\": {\n    \"bank_code\": \"ABC001\",\n    \"bank_name\": \"Allianza State Bank\",\n    \"legal_name\": \"Allianza State Bank Ltd\",\n    \"bank_type\": \"COMMERCIAL\",\n    \"contact_email\": \"contact@allianzabank.com\",\n    \"contact_phone\": \"9876543210\",\n    \"pan\": \"ABCDE1234F\",\n    \"gst_no\": \"27ABCDE1234F1Z5\",\n    \"ifsc_code\": \"ALZA0001234\",\n    \"license_no\": \"RBI-LIC-2024-001\",\n    \"website\": \"https://www.allianzabank.com\",\n    \"logo_url\": \"https://www.allianzabank.com/logo.png\",\n    \"status\": \"ACTIVE\",\n    \"regulatory_status\": \"LICENSED\",\n    \"direct_clg_member\": true,\n    \"direct_member_iftas\": true,\n    \"micr1\": \"400\",\n    \"micr2\": \"024\",\n    \"micr3\": \"001\",\n    \"micr_number\": \"400024001\",\n    \"no_of_branches\": 12,\n    \"sponsor_bank_clg\": \"State Bank of India\",\n    \"sponsor_bank_iftas\": \"Reserve Bank of India\",\n    \"address_type\": \"Registered Office\",\n    \"unit_gala\": \"Suite 501, 5th Floor\",\n    \"street_road\": \"MG Road, Financial District\",\n    \"landmark\": \"Near Reserve Bank\",\n    \"city\": \"Mumbai\",\n    \"state\": \"Maharashtra\",\n    \"country\": \"India\",\n    \"pincode\": \"400001\"\n  },\n  \"initial_user\": {\n    \"emp_id\": \"EMP001\",\n    \"username\": \"superadmin\",\n    \"password\": \"Admin@Password123\",\n    \"title\": \"Mr.\",\n    \"first_name\": \"Super\",\n    \"middle_name\": \"A.\",\n    \"last_name\": \"Admin\",\n    \"email\": \"superadmin@allianzabank.com\",\n    \"mobile\": \"9876543210\",\n    \"dob\": \"1990-01-15\",\n    \"gender\": \"MALE\",\n    \"designation\": \"Chief Technology Officer\",\n    \"user_role\": \"SUPER_ADMIN\",\n    \"system_role\": \"1\",\n    \"status\": \"ACTIVE\",\n    \"login_branch\": 0,\n    \"login_time\": \"09:00:00\",\n    \"logout_time\": \"18:00:00\",\n    \"session_timeout\": 30,\n    \"no_of_bad_logins\": 0\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/setup/initialize-bank",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"setup",
+								"initialize-bank"
+							]
+						},
+						"description": "Provisions the dedicated PostgreSQL database, runs Flyway migrations, and inserts the Super Admin user."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Initialize Bank (Minimal Payload)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"bank\": {\n    \"bank_code\": \"XYZ002\",\n    \"bank_name\": \"Apex Urban Co-op Bank\"\n  },\n  \"initial_user\": {\n    \"username\": \"admin_xyz\",\n    \"password\": \"Admin@Pass123\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/setup/initialize-bank",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"setup",
+								"initialize-bank"
+							]
+						},
+						"description": "Quick setup with mandatory fields only."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Get All Banks",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/setup/banks",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"setup",
+								"banks"
+							]
+						},
+						"description": "Retrieves all registered banks from master setup database."
+					},
+					"response": []
+				},
+				{
+					"name": "4. Get Bank by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/setup/banks/{{bankId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"setup",
+								"banks",
+								"{{bankId}}"
+							]
+						},
+						"description": "Retrieves details of a single bank by ID."
+					},
+					"response": []
+				},
+				{
+					"name": "5. Get Bank by Code",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/setup/banks/code/{{bankCode}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"setup",
+								"banks",
+								"code",
+								"{{bankCode}}"
+							]
+						},
+						"description": "Retrieves bank details by its unique Bank Code."
+					},
+					"response": []
+				},
+				{
+					"name": "6. Update Bank Details",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"bank_name\": \"Allianza Global Bank\",\n  \"contact_email\": \"support@allianzabank.com\",\n  \"contact_phone\": \"9123456780\",\n  \"no_of_branches\": 25,\n  \"city\": \"Pune\",\n  \"state\": \"Maharashtra\",\n  \"pincode\": \"411001\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/setup/banks/{{bankId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"setup",
+								"banks",
+								"{{bankId}}"
+							]
+						},
+						"description": "Updates non-null fields for the bank."
+					},
+					"response": []
+				},
+				{
+					"name": "7. Get Initial Admin User of Bank",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/setup/banks/{{bankId}}/user",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"setup",
+								"banks",
+								"{{bankId}}",
+								"user"
+							]
+						},
+						"description": "Retrieves seeded admin profile for the bank (passwords omitted)."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "02. Masters - Lookup Management (Part A)",
+			"item": [
+				{
+					"name": "1. Search / List Lookups (With Embedded Sub-Lookups)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/lookups?search=&status=ALL",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"lookups"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "",
+									"description": "Optional search term matching code or name/description"
+								},
+								{
+									"key": "status",
+									"value": "ALL",
+									"description": "Filter by status: ALL, ACTIVE, or INACTIVE"
+								}
+							]
+						},
+						"description": "Retrieves lookups with embedded sub-lookups (for UI table row expansion) and count badge."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Get Lookup by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/lookups/{{lookupId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"lookups",
+								"{{lookupId}}"
+							]
+						},
+						"description": "Fetches single lookup record by its primary key ID."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Create Lookup",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.id) {",
+									"    pm.collectionVariables.set('lookupId', jsonData.data.id);",
+									"}",
+									"if (jsonData.data && jsonData.data.code) {",
+									"    pm.collectionVariables.set('lookupCode', jsonData.data.code);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"code\": \"10004\",\n  \"name\": \"Loan Types\",\n  \"description\": \"Loan Types\",\n  \"status\": \"Active\",\n  \"is_fixed\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/lookups",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"lookups"
+							]
+						},
+						"description": "Creates a new master lookup. Code must be digits only and unique."
+					},
+					"response": []
+				},
+				{
+					"name": "4. Update Lookup",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Commercial Loan Types\",\n  \"status\": \"Active\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/lookups/{{lookupId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"lookups",
+								"{{lookupId}}"
+							]
+						},
+						"description": "Edits lookup name, description, and status. Disallows deactivating if is_fixed=true."
+					},
+					"response": []
+				},
+				{
+					"name": "5. Toggle Lookup Status",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"Inactive\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/lookups/{{lookupId}}/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"lookups",
+								"{{lookupId}}",
+								"status"
+							]
+						},
+						"description": "Toggles lookup active/inactive status."
+					},
+					"response": []
+				},
+				{
+					"name": "6. Get Sub-Lookups of Parent Lookup",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/lookups/{{lookupId}}/sub-lookups",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"lookups",
+								"{{lookupId}}",
+								"sub-lookups"
+							]
+						},
+						"description": "Retrieves all sub-lookups ordered by display_order, then sub_type_code."
+					},
+					"response": []
+				},
+				{
+					"name": "7. Create Sub-Lookup Under Lookup",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.id) {",
+									"    pm.collectionVariables.set('subLookupId', jsonData.data.id);",
+									"}",
+									"if (jsonData.data && (jsonData.data.sub_lookup_code || jsonData.data.code)) {",
+									"    pm.collectionVariables.set('subLookupCode', jsonData.data.sub_lookup_code || jsonData.data.code);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"code\": \"4\",\n  \"sub_lookup_code\": \"1000801\",\n  \"name\": \"Mr\",\n  \"status\": \"Active\",\n  \"display_order\": 1,\n  \"is_fixed\": false\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/lookups/{{lookupId}}/sub-lookups",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"lookups",
+								"{{lookupId}}",
+								"sub-lookups"
+							]
+						},
+						"description": "Creates a sub-lookup under parent lookup. The sub_lookup_code format is <lookup_code><sub_code> (e.g. 1000801 where 10008 is lookup code and 01 is sublookup code)."
+					},
+					"response": []
+				},
+				{
+					"name": "8. Update Sub-Lookup",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Gold Loan Scheme 2026\",\n  \"display_order\": 1,\n  \"status\": \"Active\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sub-lookups/{{subLookupId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sub-lookups",
+								"{{subLookupId}}"
+							]
+						},
+						"description": "Updates sub-lookup name, display order, or status."
+					},
+					"response": []
+				},
+				{
+					"name": "9. Toggle Sub-Lookup Status",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"Inactive\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/sub-lookups/{{subLookupId}}/status",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"sub-lookups",
+								"{{subLookupId}}",
+								"status"
+							]
+						},
+						"description": "Toggles sub-lookup active/inactive."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "03. Consumer Form Dropdowns (Part B)",
+			"item": [
+				{
+					"name": "1. Single Dropdown by Lookup Code",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/lookups/code/{{lookupCode}}/sub-lookups?activeOnly=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"lookups",
+								"code",
+								"{{lookupCode}}",
+								"sub-lookups"
+							],
+							"query": [
+								{
+									"key": "activeOnly",
+									"value": "true",
+									"description": "Filters out inactive options (defaults to true)"
+								}
+							]
+						},
+						"description": "Used by forms to populate dropdowns. Returns [{code, name, displayOrder}] sorted by display_order."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Bulk Dropdowns for Multi-Select Forms",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/lookups/sub-lookups?codes=10004,10005,10002&activeOnly=true",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"lookups",
+								"sub-lookups"
+							],
+							"query": [
+								{
+									"key": "codes",
+									"value": "10004,10005,10002",
+									"description": "Comma-separated parent lookup codes"
+								},
+								{
+									"key": "activeOnly",
+									"value": "true",
+									"description": "Filters out inactive options"
+								}
+							]
+						},
+						"description": "Loads options for all form dropdowns in a single HTTP request to eliminate frontend waterfall loading."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

@@ -1,0 +1,945 @@
+{
+  "info": {
+    "_postman_id": "c1f8e210-9b34-4a25-8321-4d1a1b1e9001",
+    "name": "LOS - Customer Onboarding API",
+    "description": "Allianza LOS Individual Customer Onboarding API: step-by-step draft flow (create on step 1, update on every Continue, submit at the end), document upload / replace / delete, listing and authentication.\n\nRun order: 0. Authentication -> 2. Step 1 Create Draft -> Steps 2-4 -> 3. Upload Document(s) -> Steps 6-7 -> Submit.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "tempToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerCode",
+      "value": "CUS-2026-00001",
+      "type": "string"
+    },
+    {
+      "key": "documentId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "0. Authentication",
+      "item": [
+        {
+          "name": "1. Staff Login (Phase 1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.tempToken) {",
+                  "        pm.collectionVariables.set(\"tempToken\", json.data.tempToken);",
+                  "        console.log(\"Saved tempToken to collection variable!\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@bank.com\",\n  \"password\": \"Admin@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Internal staff login. Dispatches 2FA OTP and automatically stores tempToken."
+          }
+        },
+        {
+          "name": "2. Verify 2FA OTP (Phase 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.accessToken) {",
+                  "        pm.collectionVariables.set(\"authToken\", json.data.accessToken);",
+                  "        console.log(\"Saved authToken to collection variable!\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@bank.com\",\n  \"tempToken\": \"{{tempToken}}\",\n  \"otp\": \"<paste_6_digit_otp_from_server_log>\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-otp"
+              ]
+            },
+            "description": "Submits 2FA OTP and automatically stores accessToken in collection variable {{authToken}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Lookups",
+      "item": [
+        {
+          "name": "Get All Lookups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups"
+              ]
+            },
+            "description": "Returns list of all master lookup types registered in the system."
+          }
+        },
+        {
+          "name": "Get Sub-Lookups by Parent Code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/sub-lookups/10008",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sub-lookups",
+                "10008"
+              ]
+            },
+            "description": "Returns active sub-lookup values for a given master lookup code (e.g. 10008 for Title, 10017 for Employment Type)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Customer Onboarding (Draft Flow)",
+      "description": "Step-by-step onboarding. The customer is created as a DRAFT on step 1 and every later 'Continue' updates the same customer with PUT.\n\nRules:\n- First Continue (no customerCode yet) -> POST /api/customers. Every later Continue -> PUT /api/customers/{customerCode}.\n- PUT saves ONLY the sections present in the body. A missing section is left as it is.\n- Lists (previousEmployment, taxReturns, loanHistory, references): null/missing = not part of this save, [] = clear all rows.\n- personal must be sent together with family (spouse rules depend on marital status).\n- Masked PAN/Aadhaar/CKYC/account numbers (as returned by GET) mean 'unchanged'.\n- Documents are uploaded during step 5 with the '3. Customer Documents' requests.\n- Submit checks every mandatory step and the required documents, then sets onboardingStatus = COMPLETED.",
+      "item": [
+        {
+          "name": "Step 1 - Personal Details: Create Draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ]
+            },
+            "description": "First 'Continue' on step 1. Requires personal, identity and family. Runs the duplicate checks (PAN, Aadhaar, mobile, email), generates the customer code and creates the customer with onboardingStatus = DRAFT. The customerCode is saved to the collection variable.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": 1,\n  \"leadId\": null,\n  \"personal\": {\n    \"title\": \"1000801\",\n    \"firstName\": \"Rajesh\",\n    \"middleName\": \"Kumar\",\n    \"lastName\": \"Sharma\",\n    \"dob\": \"1990-05-15\",\n    \"gender\": \"1000901\",\n    \"maritalStatus\": \"1001101\",\n    \"customerType\": \"1001201\",\n    \"kycStatus\": \"1001301\",\n    \"occupation\": \"Software Engineer\",\n    \"mobile\": \"9876543210\",\n    \"alternateContact\": \"9876543211\",\n    \"email\": \"rajesh.sharma@example.com\"\n  },\n  \"identity\": {\n    \"panNumber\": \"ABCDE1234F\",\n    \"aadhaarNumber\": \"123456789012\",\n    \"ckycNumber\": \"12345678901234\"\n  },\n  \"family\": {\n    \"fatherTitle\": \"1000801\",\n    \"fatherFirstName\": \"Ramesh\",\n    \"fatherMiddleName\": \"Chandra\",\n    \"fatherLastName\": \"Sharma\",\n    \"motherTitle\": \"1000802\",\n    \"motherFirstName\": \"Sunita\",\n    \"motherLastName\": \"Sharma\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.customerCode) {",
+                  "        pm.collectionVariables.set(\"customerCode\", json.data.customerCode);",
+                  "        console.log(\"Saved customerCode: \" + json.data.customerCode);",
+                  "    }",
+                  "}",
+                  "pm.test(\"Draft created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().data.onboardingStatus).to.eql(\"DRAFT\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 1 - Back & Continue again (re-save)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}"
+              ]
+            },
+            "description": "User went back to step 1, changed something and pressed Continue again. Updates the SAME customer (no new customer code). Duplicate checks ignore this customer's own record. Masked identity numbers keep the stored values.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"personal\": {\n    \"title\": \"1000801\",\n    \"firstName\": \"Rajeshwar\",\n    \"middleName\": \"Kumar\",\n    \"lastName\": \"Sharma\",\n    \"dob\": \"1990-05-15\",\n    \"gender\": \"1000901\",\n    \"maritalStatus\": \"1001101\",\n    \"customerType\": \"1001201\",\n    \"kycStatus\": \"1001301\",\n    \"occupation\": \"Software Engineer\",\n    \"mobile\": \"9876543210\",\n    \"alternateContact\": \"9876543211\",\n    \"email\": \"rajesh.sharma@example.com\"\n  },\n  \"identity\": {\n    \"panNumber\": \"ABCDE****F\",\n    \"aadhaarNumber\": \"********9012\",\n    \"ckycNumber\": \"**********1234\"\n  },\n  \"family\": {\n    \"fatherTitle\": \"1000801\",\n    \"fatherFirstName\": \"Ramesh\",\n    \"fatherMiddleName\": \"Chandra\",\n    \"fatherLastName\": \"Sharma\",\n    \"motherTitle\": \"1000802\",\n    \"motherFirstName\": \"Sunita\",\n    \"motherLastName\": \"Sharma\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Step saved\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 2 - Address Details",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}"
+              ]
+            },
+            "description": "Saves only the address section.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": {\n    \"residentialStatus\": \"1001401\",\n    \"residentialType\": \"1001501\",\n    \"flatBuildingName\": \"Flat 402, Green Heights\",\n    \"streetRoad\": \"MG Road\",\n    \"landmark\": \"Near Metro Station\",\n    \"city\": \"Mumbai\",\n    \"state\": \"1001601\",\n    \"pincode\": \"400001\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Step saved\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 3 - Employment Info",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}"
+              ]
+            },
+            "description": "Saves employment and previous employment. If employment type is Self Employed and previousEmployment is not sent, saved previous employment rows are removed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employment\": {\n    \"employmentType\": \"1001701\",\n    \"employerType\": \"1001801\",\n    \"designation\": \"Senior Consultant\",\n    \"employerName\": \"Infosys Technologies Ltd\",\n    \"dateOfJoining\": \"2020-03-01\",\n    \"qualification\": \"B.Tech\",\n    \"employerEmail\": \"rajesh.s@infosys.com\",\n    \"listedStatus\": \"1001901\",\n    \"yearsOfService\": 4.0,\n    \"location\": \"Pune\"\n  },\n  \"previousEmployment\": [\n    {\n      \"employmentType\": \"1001701\",\n      \"employerName\": \"Wipro Limited\",\n      \"designation\": \"Software Engineer\",\n      \"location\": \"Pune\",\n      \"dateOfJoining\": \"2017-06-01\",\n      \"dateOfRelieving\": \"2020-02-15\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Step saved\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 4 - Income Details (income, bank, tax returns)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}"
+              ]
+            },
+            "description": "Saves income, bank account and tax returns. Self-employed income rules use the employment type saved in step 3. If filer status is Non-Filer and taxReturns is not sent, saved tax returns are removed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"income\": {\n    \"annualIncome\": 1500000.0,\n    \"otherSourceIncome\": 50000.0,\n    \"totalGrossIncome\": 1550000.0,\n    \"totalNetIncome\": 1200000.0,\n    \"incomeTax\": 350000.0,\n    \"incomeTaxFilerStatus\": \"1002001\",\n    \"riskCategory\": \"1002101\"\n  },\n  \"bank\": {\n    \"bankName\": \"State Bank of India\",\n    \"accountNumber\": \"123456789012\",\n    \"accountType\": \"1002201\",\n    \"accountStatus\": \"1002301\"\n  },\n  \"taxReturns\": [\n    {\n      \"financialYear\": \"2024-25\",\n      \"grossIncome\": 1500000.0,\n      \"tdsPaid\": 120000.0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Step saved\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 6 - Loan History",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}"
+              ]
+            },
+            "description": "Saves manual loan history (send [] when the customer has no other loans).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loanHistory\": [\n    {\n      \"bankName\": \"HDFC Bank\",\n      \"accountNumber\": \"LOAN987654\",\n      \"loanType\": \"Auto Loan\",\n      \"totalOutstanding\": 250000.0,\n      \"emi\": 12500.0,\n      \"expiryDate\": \"2027-12-31\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Step saved\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Step 7 - References",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}"
+              ]
+            },
+            "description": "Saves the two references (exactly 2 when sent).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"references\": [\n    {\n      \"srNo\": 1,\n      \"referenceName\": \"Amit Patel\",\n      \"relation\": \"Friend\",\n      \"location\": \"Mumbai\",\n      \"contactNo\": \"9823456789\",\n      \"email\": \"amit.patel@example.com\"\n    },\n    {\n      \"srNo\": 2,\n      \"referenceName\": \"Pooja Verma\",\n      \"relation\": \"Colleague\",\n      \"location\": \"Pune\",\n      \"contactNo\": \"9834567890\",\n      \"email\": \"pooja.verma@example.com\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Step saved\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submit Onboarding (DRAFT -> COMPLETED)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}",
+                "submit"
+              ]
+            },
+            "description": "Final Submit. Checks that personal, identity, family, address, employment, income, bank and 2 references are saved, and that the required documents are uploaded (app.customer.documents.required-types and min-count). Missing items come back as 400 with errors keyed by step (address, income, documents, documents.<TYPE> ...). On success sets onboardingStatus = COMPLETED, submittedAt and submittedBy. Submitting twice returns 409."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Submitted\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.onboardingStatus).to.eql(\"COMPLETED\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Customer Profile (resume / edit)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}"
+              ]
+            },
+            "description": "Loads a draft to resume after refresh, or a completed customer for edit. Includes onboardingStatus and submittedAt. Identity numbers and bank account are masked."
+          }
+        },
+        {
+          "name": "Edit Completed Customer (single section)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}"
+              ]
+            },
+            "description": "Edit mode works the same way: send only the section that changed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": {\n    \"residentialStatus\": \"1001401\",\n    \"residentialType\": \"1001501\",\n    \"flatBuildingName\": \"Flat 502, Blue Horizon\",\n    \"streetRoad\": \"Linking Road\",\n    \"landmark\": \"Near Metro Station\",\n    \"city\": \"Mumbai\",\n    \"state\": \"1001601\",\n    \"pincode\": \"400050\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List Customers (completed, default)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers?search=Rajesh&status=active&onboardingStatus=COMPLETED&page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "Rajesh",
+                  "description": "Search by code, name, email, or mobile"
+                },
+                {
+                  "key": "status",
+                  "value": "active",
+                  "description": "active or inactive (c001.is_active)"
+                },
+                {
+                  "key": "onboardingStatus",
+                  "value": "COMPLETED",
+                  "description": "COMPLETED (default), DRAFT or ALL"
+                },
+                {
+                  "key": "customerType",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Paged list from v_customer_profile. onboardingStatus defaults to COMPLETED, so drafts are hidden."
+          }
+        },
+        {
+          "name": "List Draft Customers (resume onboarding)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers?onboardingStatus=DRAFT&page=0&size=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ],
+              "query": [
+                {
+                  "key": "onboardingStatus",
+                  "value": "DRAFT",
+                  "description": "COMPLETED (default), DRAFT or ALL"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Unfinished onboardings, newest first."
+          }
+        },
+        {
+          "name": "Discard Draft",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}"
+              ]
+            },
+            "description": "Cancels an unfinished onboarding: deletes the DRAFT customer, all its step data and its uploaded files, and unlinks the lead. Only allowed while onboardingStatus = DRAFT (409 otherwise)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Customer Documents (step 5)",
+      "description": "Documents are uploaded one file per request, as soon as the user picks them (works for DRAFT and COMPLETED customers). For 10 files the frontend sends 10 upload calls (2-3 at a time).\n\nSame document type uploaded again: the old file is replaced (soft deleted) and its id is returned in replacedDocumentIds, unless the type is listed in app.customer.documents.multiple-allowed-types.",
+      "item": [
+        {
+          "name": "1. Upload Document",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "PDF, PNG or JPEG, max 5 MB. Do NOT add a manual Content-Type header."
+                },
+                {
+                  "key": "documentTypeCode",
+                  "value": "1002401",
+                  "type": "text",
+                  "description": "Document Type sub-lookup code (e.g. 1002401 for Aadhaar Card)"
+                },
+                {
+                  "key": "expiryDate",
+                  "value": "2030-12-31",
+                  "type": "text",
+                  "description": "Optional (YYYY-MM-DD)"
+                },
+                {
+                  "key": "remarks",
+                  "value": "Aadhaar Card Copy for KYC",
+                  "type": "text",
+                  "description": "Optional"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}",
+                "documents"
+              ]
+            },
+            "description": "Uploads one document. Response includes replacedDocumentIds when an older file of the same single-file type was replaced. storagePath is never returned."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.id) {",
+                  "        pm.collectionVariables.set(\"documentId\", json.data.id);",
+                  "        console.log(\"Saved documentId: \" + json.data.id);",
+                  "    }",
+                  "    if (json.data && json.data.replacedDocumentIds && json.data.replacedDocumentIds.length) {",
+                  "        console.log(\"Replaced (soft deleted) document ids: \" + json.data.replacedDocumentIds.join(\", \"));",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Replace Document (wrong file uploaded)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "PDF, PNG or JPEG, max 5 MB. Do NOT add a manual Content-Type header."
+                },
+                {
+                  "key": "documentTypeCode",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Optional; keeps the old type when not sent"
+                },
+                {
+                  "key": "expiryDate",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Optional; keeps the old expiry date when not sent"
+                },
+                {
+                  "key": "remarks",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true,
+                  "description": "Optional; keeps the old remarks when not sent"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}/documents/{{documentId}}/replace",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}",
+                "documents",
+                "{{documentId}}",
+                "replace"
+              ]
+            },
+            "description": "Replaces document {{documentId}} with a new file in one step: the new file is saved and the old one is soft deleted (kept for audit). Returns the NEW document id (saved to documentId) and replacedDocumentIds = [old id]."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.id) {",
+                  "        pm.collectionVariables.set(\"documentId\", json.data.id);",
+                  "        console.log(\"Saved documentId: \" + json.data.id);",
+                  "    }",
+                  "    if (json.data && json.data.replacedDocumentIds && json.data.replacedDocumentIds.length) {",
+                  "        console.log(\"Replaced (soft deleted) document ids: \" + json.data.replacedDocumentIds.join(\", \"));",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. List Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}",
+                "documents"
+              ]
+            },
+            "description": "Active (not deleted) documents, newest first."
+          }
+        },
+        {
+          "name": "4. View Document (Inline Stream)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}/documents/{{documentId}}/view",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}",
+                "documents",
+                "{{documentId}}",
+                "view"
+              ]
+            },
+            "description": "Streams the document inline (Content-Disposition: inline)."
+          }
+        },
+        {
+          "name": "5. Download Document (Attachment Stream)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}/documents/{{documentId}}/download",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}",
+                "documents",
+                "{{documentId}}",
+                "download"
+              ]
+            },
+            "description": "Streams the document as a download (Content-Disposition: attachment)."
+          }
+        },
+        {
+          "name": "6. Delete Document (soft delete)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerCode}}/documents/{{documentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerCode}}",
+                "documents",
+                "{{documentId}}"
+              ]
+            },
+            "description": "Soft deletes the document (is_deleted = true, deleted_by, deleted_at). The file is kept."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,275 @@
+{
+	"info": {
+		"_postman_id": "b3e94511-9a72-4c59-bf88-f58c73d9e84b",
+		"name": "Allianza LOS - Gold Rate Master & Audit Trail",
+		"description": "Postman API Collection for Gold Rate Master and Complete Audit Trail / Activity Log in Allianza Loan Origination System (LOS). Covers Gold Rate Master daily rates, old/new value capture, user details, and maker-checker verification.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "activityId",
+			"value": "12",
+			"type": "string"
+		},
+		{
+			"key": "recordId",
+			"value": "GOLD-1029-12",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "01. Gold Rate Activity Records (Audit Trail)",
+			"description": "Activity history tracking all Gold Rate Master changes, creations, updates, old and new values, user details, and verification.",
+			"item": [
+				{
+					"name": "1. Get All Activity Records",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/gold-rates/activities",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"gold-rates",
+								"activities"
+							]
+						},
+						"description": "Fetches all Gold Rate Master activity records ordered by date and time descending."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Get Activity Record by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/gold-rates/activities/{{activityId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"gold-rates",
+								"activities",
+								"{{activityId}}"
+							]
+						},
+						"description": "Fetches a specific activity record matching the reference payload."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Create Activity Record",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"date\": \"26 Oct 2026\",\n  \"time\": \"11:45 AM\",\n  \"module\": \"Gold Rate Master\",\n  \"recordId\": \"GOLD-1029-12\",\n  \"action\": \"Updated\",\n  \"field\": \"22K Rate\",\n  \"oldValue\": \"₹6,420\",\n  \"newValue\": \"₹6,455\",\n  \"createdBy\": \"Neha Singh\",\n  \"createdById\": \"USR-108\",\n  \"modifiedBy\": \"Neha Singh\",\n  \"modifiedById\": \"USR-108\",\n  \"verifiedBy\": \"-\",\n  \"verifiedById\": \"-\",\n  \"status\": \"Pending\",\n  \"description\": \"Daily gold rate was updated for loan valuation.\",\n  \"ip\": \"192.168.1.21\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/gold-rates/activities",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"gold-rates",
+								"activities"
+							]
+						},
+						"description": "Records a new Gold Rate Master activity entry."
+					},
+					"response": []
+				},
+				{
+					"name": "4. Update Activity Record (Maker-Checker Verification)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"Approved\",\n  \"verifiedBy\": \"Rajesh Verma\",\n  \"verifiedById\": \"USR-201\",\n  \"description\": \"Verified and approved daily gold rate by Branch Manager.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/gold-rates/activities/{{activityId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"gold-rates",
+								"activities",
+								"{{activityId}}"
+							]
+						},
+						"description": "Updates maker-checker status and verifier details while preserving immutable audit history."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "02. Gold Rate Master Rates",
+			"description": "Endpoints for Gold Rate Master benchmark rates per gram by purity (24K, 22K, 18K).",
+			"item": [
+				{
+					"name": "1. Get All Master Rates",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/gold-rates/master",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"gold-rates",
+								"master"
+							]
+						},
+						"description": "Retrieves all Gold Rate Master records."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Get Master Rate by Record ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/gold-rates/master/{{recordId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"gold-rates",
+								"master",
+								"{{recordId}}"
+							]
+						},
+						"description": "Retrieves rate details for a specific record ID (e.g. GOLD-1029-12)."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Create Master Rate",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"recordId\": \"GOLD-1029-14\",\n  \"rate24k\": 7100.00,\n  \"rate22k\": 6510.00,\n  \"rate18k\": 5325.00,\n  \"currency\": \"INR\",\n  \"unit\": \"GRAM\",\n  \"status\": \"Active\",\n  \"description\": \"Daily revision benchmark rate.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/gold-rates/master",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"gold-rates",
+								"master"
+							]
+						},
+						"description": "Creates a new daily benchmark rate and creates an initial audit activity record."
+					},
+					"response": []
+				},
+				{
+					"name": "4. Update Master Rate (Auto-triggers Audit Trail)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"rate22k\": 6455.00,\n  \"rate24k\": 7040.00,\n  \"description\": \"Daily gold rate was updated for loan valuation.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/gold-rates/master/{{recordId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"gold-rates",
+								"master",
+								"{{recordId}}"
+							]
+						},
+						"description": "Updates rate, captures old value and new value, and auto-records an audit log in gold_rate_activity."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

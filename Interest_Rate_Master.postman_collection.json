@@ -1,0 +1,537 @@
+{
+  "info": {
+    "_postman_id": "b7d1c5a2-4e3f-4a8b-9c61-2f0e8d7a1c33",
+    "name": "LOS - Interest Rate Master API",
+    "description": "Interest Rate Master: effective-dated, tiered interest rates for loan products, with maker-checker approval.\n\nRun order: 0. Authentication (maker) -> 1. Create Rate Sheet -> 0. Authentication (checker, a different user) -> 2. Approve -> 3. Get Applicable Rate (use a date on or after effectiveDate, or set effectiveDate to today).\n\nSet the collection variables productCode (an existing ACTIVE loan product) and effectiveDate (yyyy-MM-dd, today or later) first.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "tempToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productCode",
+      "value": "PL01",
+      "type": "string"
+    },
+    {
+      "key": "effectiveDate",
+      "value": "2026-12-01",
+      "type": "string"
+    },
+    {
+      "key": "rateMasterId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "0. Authentication",
+      "item": [
+        {
+          "name": "1. Staff Login (Phase 1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.tempToken) {",
+                  "        pm.collectionVariables.set(\"tempToken\", json.data.tempToken);",
+                  "        console.log(\"Saved tempToken to collection variable!\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@bank.com\",\n  \"password\": \"Admin@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Internal staff login. Dispatches 2FA OTP and automatically stores tempToken."
+          }
+        },
+        {
+          "name": "2. Verify 2FA OTP (Phase 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.accessToken) {",
+                  "        pm.collectionVariables.set(\"authToken\", json.data.accessToken);",
+                  "        console.log(\"Saved authToken to collection variable!\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@bank.com\",\n  \"tempToken\": \"{{tempToken}}\",\n  \"otp\": \"<paste_6_digit_otp_from_server_log>\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-otp"
+              ]
+            },
+            "description": "Submits 2FA OTP and automatically stores accessToken in collection variable {{authToken}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Rate Sheets (maker)",
+      "description": "A rate sheet = one product + one effective date + tiers. New and edited sheets are PENDING until a different user approves them. A sheet that is APPROVED and already in effect cannot be edited or deleted: create a new sheet with a later effective date instead.",
+      "item": [
+        {
+          "name": "1. Create Rate Sheet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/interest-rate-masters",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interest-rate-masters"
+              ]
+            },
+            "description": "Creates a PENDING rate sheet for {{productCode}}. Tiers can be in any order; they are sorted by up to amount, then up to months, and numbered. Rules: effective date today or later, at least one tier, normal rate required (0-100, 2 decimals), penal/adhoc optional, no repeated (upToAmount, upToMonths) pair, one live sheet per product per date. 'warnings' lists loans the product allows that no tier covers. rateMasterId is saved automatically.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productCode\": \"{{productCode}}\",\n  \"effectiveDate\": \"{{effectiveDate}}\",\n  \"remarks\": \"Revised rates from RBI policy\",\n  \"tiers\": [\n    {\n      \"upToAmount\": 500000,\n      \"upToMonths\": 36,\n      \"normalRate\": 12.5,\n      \"penalRate\": 2.0,\n      \"adhocRate\": null\n    },\n    {\n      \"upToAmount\": 500000,\n      \"upToMonths\": 60,\n      \"normalRate\": 13.0,\n      \"penalRate\": 2.0,\n      \"adhocRate\": null\n    },\n    {\n      \"upToAmount\": 1000000,\n      \"upToMonths\": 36,\n      \"normalRate\": 11.75,\n      \"penalRate\": null,\n      \"adhocRate\": null\n    },\n    {\n      \"upToAmount\": 1000000,\n      \"upToMonths\": 60,\n      \"normalRate\": 12.25,\n      \"penalRate\": null,\n      \"adhocRate\": 0.5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set(\"rateMasterId\", json.data.id);",
+                  "    console.log(\"Saved rateMasterId: \" + json.data.id);",
+                  "    if (json.data.warnings && json.data.warnings.length) { console.warn(json.data.warnings.join(\"\\n\")); }",
+                  "}",
+                  "pm.test(\"Status 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(pm.response.json().data.status).to.eql(\"PENDING\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1b. Create Rate Sheet (frontend snake_case payload)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/interest-rate-masters",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interest-rate-masters"
+              ]
+            },
+            "description": "Same API with the payload the current Interest Rate Master screen sends (product_code, effective_date, tiers[].up_to_amount, normal_interest_rate ...). Use a different effectiveDate than request 1, or it returns 409.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"product_code\": \"{{productCode}}\",\n  \"product_name\": \"ignored - taken from the product\",\n  \"effective_date\": \"{{effectiveDate}}\",\n  \"tiers\": [\n    {\n      \"up_to_amount\": 500000,\n      \"up_to_months\": 36,\n      \"normal_interest_rate\": 12.5,\n      \"penal_rate\": 2,\n      \"adhoc_rate\": null\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "2. List Rate Sheets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/interest-rate-masters?productCode={{productCode}}&page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interest-rate-masters"
+              ],
+              "query": [
+                {
+                  "key": "productCode",
+                  "value": "{{productCode}}",
+                  "description": "Optional product filter"
+                },
+                {
+                  "key": "status",
+                  "value": "PENDING",
+                  "disabled": true,
+                  "description": "PENDING, APPROVED or REJECTED"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20",
+                  "description": "Max 100"
+                }
+              ]
+            },
+            "description": "Paged list, grouped by product, newest effective date first. Each sheet shows status, currentlyApplied (the sheet new loans use today) and editable."
+          }
+        },
+        {
+          "name": "3. Get Rate Sheet",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/interest-rate-masters/{{rateMasterId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interest-rate-masters",
+                "{{rateMasterId}}"
+              ]
+            },
+            "description": "One rate sheet with its tiers."
+          }
+        },
+        {
+          "name": "4. Update Rate Sheet",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/interest-rate-masters/{{rateMasterId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interest-rate-masters",
+                "{{rateMasterId}}"
+              ]
+            },
+            "description": "Replaces the sheet's product, date, remarks and tiers. Allowed while the sheet is not in effect (PENDING, REJECTED, or APPROVED with a future date). Status goes back to PENDING and the approval is cleared. 409 when the sheet is approved and already in effect.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productCode\": \"{{productCode}}\",\n  \"effectiveDate\": \"{{effectiveDate}}\",\n  \"remarks\": \"Corrected 5 lakh / 60 month rate\",\n  \"tiers\": [\n    {\n      \"upToAmount\": 500000,\n      \"upToMonths\": 36,\n      \"normalRate\": 12.5,\n      \"penalRate\": 2.0,\n      \"adhocRate\": null\n    },\n    {\n      \"upToAmount\": 500000,\n      \"upToMonths\": 60,\n      \"normalRate\": 12.9,\n      \"penalRate\": 2.0,\n      \"adhocRate\": null\n    },\n    {\n      \"upToAmount\": 1000000,\n      \"upToMonths\": 36,\n      \"normalRate\": 11.75,\n      \"penalRate\": null,\n      \"adhocRate\": null\n    },\n    {\n      \"upToAmount\": 1000000,\n      \"upToMonths\": 60,\n      \"normalRate\": 12.25,\n      \"penalRate\": null,\n      \"adhocRate\": 0.5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.status).to.eql(\"PENDING\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Delete Rate Sheet",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/interest-rate-masters/{{rateMasterId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interest-rate-masters",
+                "{{rateMasterId}}"
+              ]
+            },
+            "description": "Deletes a sheet that is not in effect yet. 409 for an approved sheet already in effect."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Approval (checker)",
+      "description": "Log in as a DIFFERENT user than the one who created or last edited the sheet (run '0. Authentication' again with the checker's credentials). The maker approving their own sheet gets 409.",
+      "item": [
+        {
+          "name": "1. Approve Rate Sheet",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/interest-rate-masters/{{rateMasterId}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interest-rate-masters",
+                "{{rateMasterId}}",
+                "approve"
+              ]
+            },
+            "description": "PENDING -> APPROVED. Fails with 409 if not PENDING or the caller is the maker, and with 400 if the effective date has already passed (edit the date first)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.status).to.eql(\"APPROVED\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Reject Rate Sheet",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/interest-rate-masters/{{rateMasterId}}/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interest-rate-masters",
+                "{{rateMasterId}}",
+                "reject"
+              ]
+            },
+            "description": "PENDING -> REJECTED with a reason (required). The maker can edit it, which sends it back to PENDING.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Rate for 5 lakh / 60 months is above the approved band\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Rate for a Loan",
+      "description": "Used by the loan application form to fill the interest rate. Takes the latest APPROVED sheet effective on or before the date, then the smallest tier that covers both the amount and the tenure. The loan should save normalRate, penalRate, rateMasterId and tierId so later rate changes do not affect it.",
+      "item": [
+        {
+          "name": "1. Get Applicable Rate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/interest-rate-masters/applicable-rate?productCode={{productCode}}&amount=400000&tenureMonths=24",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interest-rate-masters",
+                "applicable-rate"
+              ],
+              "query": [
+                {
+                  "key": "productCode",
+                  "value": "{{productCode}}"
+                },
+                {
+                  "key": "amount",
+                  "value": "400000"
+                },
+                {
+                  "key": "tenureMonths",
+                  "value": "24"
+                },
+                {
+                  "key": "date",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Optional yyyy-MM-dd, default today"
+                }
+              ]
+            },
+            "description": "Returns normalRate, penalRate (from the tier, else the product penalty: see penalRateSource), adhocRate, rateMasterId and tierId. 400 when the amount or tenure is outside the product limits; 404 when no approved sheet or no tier matches."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Get Applicable Rate (on a future date)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/interest-rate-masters/applicable-rate?productCode={{productCode}}&amount=750000&tenureMonths=48&date={{effectiveDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "interest-rate-masters",
+                "applicable-rate"
+              ],
+              "query": [
+                {
+                  "key": "productCode",
+                  "value": "{{productCode}}"
+                },
+                {
+                  "key": "amount",
+                  "value": "750000"
+                },
+                {
+                  "key": "tenureMonths",
+                  "value": "48"
+                },
+                {
+                  "key": "date",
+                  "value": "{{effectiveDate}}"
+                }
+              ]
+            },
+            "description": "Same lookup for a given date, e.g. to preview the rate a loan disbursed next month would get."
+          }
+        }
+      ]
+    }
+  ]
+}
