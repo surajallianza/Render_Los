@@ -36,6 +36,9 @@ public class RuleExceptionHandler {
         Map<String, Object> response = new HashMap<>();
         response.put("success", false);
         response.put("message", ex.getMessage());
+        if (!ex.getErrors().isEmpty()) {
+            response.put("errors", ex.getErrors());
+        }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 

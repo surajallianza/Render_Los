@@ -20,7 +20,8 @@ target/
 *.ipr
 
 ### Environment files ###
-
+.env
+.env.*
 !.env.example
 
 ### NetBeans ###

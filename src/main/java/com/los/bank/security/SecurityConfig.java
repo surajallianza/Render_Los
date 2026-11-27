@@ -1,6 +1,5 @@
 package com.los.bank.security;
 
-import com.los.bank.login.service.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -13,16 +12,17 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+import com.los.bank.login.service.JwtAuthenticationFilter;
+
 /**
  * Security configuration permitting unauthenticated access to setup endpoints
  * and exposing standard BCrypt password encoder for secure user password
- * hashing.
- * Global Security Configuration. - Stateless JWT authentication - Public access
- * to authentication, setup, and lookup endpoints - Role-Based &
+ * hashing. Global Security Configuration. - Stateless JWT authentication -
+ * Public access to authentication, setup, and lookup endpoints - Role-Based &
  * Permission-Based Access Control via JwtAuthenticationFilter Security
  * configuration permitting unauthenticated access to setup endpoints and
  * exposing standard BCrypt password encoder for secure user password hashing.
-
+ *
  */
 @Configuration
 @EnableWebSecurity
@@ -70,10 +70,12 @@ public class SecurityConfig {
                                 "/api/gold-rates/**",
                                 "/api/rules/**",
                                 "/api/rule-engine/**",
-                                "/error"
-                        ).permitAll()
-                        .anyRequest().authenticated()
-                )
+                                "/api/retail-loan-applications/**",
+                                "/api/customers/**",
+                                "/api/interest-rate-masters/**",
+                                "/error")
+                        .permitAll()
+                        .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

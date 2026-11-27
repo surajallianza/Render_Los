@@ -1,45 +1,63 @@
 package com.los.bank.rule.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /**
- * Request payload for creating or updating a business rule in the Rule Engine module.
- * Preserves the exact request field names:
- * status, param, comparisonOperator, from, to, value, actionOnMatch, offset.
+ * Create / update payload, matching the Rule Engine screen.
+ *
+ * <pre>
+ * { "param": "1001401", "op": "1001503", "a": 50, "decision": "1001603",
+ *   "offset": 0, "effectiveDate": "2026-12-01" }
+ * </pre>
+ * param / op / decision take the Lookup Master sub code (from GET /api/rules/options), the lookup
+ * name ("FOIR", "Above", "Reject") or its id. For Between send a (from) and b (to). For a choice
+ * parameter (e.g. Firm Registration) send the option's code or name in a, with op "Is".
+ * offset = "Add to rate (%)", required for Override.
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@JsonInclude(JsonInclude.Include.ALWAYS)
 public class RuleRequestDto {
 
-    @JsonProperty("status")
-    private String status;
-
-    @JsonProperty("param")
+    /** "Check". */
+    @JsonAlias({"check", "parameter", "paramCode", "param_code", "paramLookupId"})
     private String param;
 
-    @JsonProperty("comparisonOperator")
-    private String comparisonOperator;
+    /** "When value is". */
+    @JsonAlias({"operator", "comparisonOperator", "operatorCode", "whenValueIs", "operatorLookupId"})
+    private String op;
 
-    @JsonProperty("from")
-    private String from;
+    /** Value, or "From" for Between, or the option for a choice parameter. */
+    @JsonAlias({"value", "val", "from", "result"})
+    private String a;
 
-    @JsonProperty("to")
-    private String to;
+    /** "To" for Between. */
+    @JsonAlias({"to"})
+    private String b;
 
-    @JsonProperty("value")
-    private String value;
+    /** "Then". */
+    @JsonAlias({"then", "actionOnMatch", "decisionCode", "decisionLookupId"})
+    private String decision;
 
-    @JsonProperty("actionOnMatch")
-    private String actionOnMatch;
+    /** "Add to rate (%)", for Override. */
+    @JsonAlias({"rateOffset", "rate_offset", "addToRate"})
+    private BigDecimal offset;
 
-    @JsonProperty("offset")
-    private Integer offset;
+    private String message;
+
+    /** ACTIVE (default) or INACTIVE. */
+    private String status;
+
+    /** The screen's active flag; used when status is not sent. */
+    private Boolean active;
+
+    @JsonAlias({"effective_date"})
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate effectiveDate;
 }

@@ -492,7 +492,6 @@ CREATE TABLE IF NOT EXISTS p004 (
 );
 
 CREATE INDEX IF NOT EXISTS idx_p004_product_id ON p004 (product_id);
-
 CREATE TABLE IF NOT EXISTS a001 (
     id                              BIGSERIAL PRIMARY KEY,
     application_number              VARCHAR(40) NOT NULL,
@@ -500,6 +499,17 @@ CREATE TABLE IF NOT EXISTS a001 (
     branch_id                       BIGINT,
     product_code                    VARCHAR(50) NOT NULL,
     status                          VARCHAR(40),
+    effective_date                  DATE,
+    mode_of_operation               VARCHAR(50),
+    last_transaction_date           DATE,
+    dpd                             INT NOT NULL DEFAULT 0,
+    purpose_code                    VARCHAR(50),
+    priority_sector                 VARCHAR(10),
+    priority_sector_code            VARCHAR(50),
+    industry_type                   VARCHAR(100),
+    industry_sub_type               VARCHAR(100),
+    physically_challenged            VARCHAR(10),
+    term_code                       VARCHAR(30),
     created_at                      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                      TIMESTAMP,
     created_by                      BIGINT,
@@ -535,6 +545,22 @@ CREATE TABLE IF NOT EXISTS a003 (
     eligibility_status              VARCHAR(40),
     sanctioned_amount               NUMERIC(15,2),
     kyc_status                      VARCHAR(30),
+    sanctioning_authority           VARCHAR(100),
+    offset_rate                     NUMERIC(8,4) DEFAULT 0,
+    total_interest_rate             NUMERIC(8,4),
+    emi_applicable                  VARCHAR(10) NOT NULL DEFAULT 'Yes',
+    emi_fix_date                    VARCHAR(30),
+    emi_type                        VARCHAR(50),
+    bullet_payment                  VARCHAR(10) NOT NULL DEFAULT 'No',
+    moratorium_applicable           VARCHAR(10) DEFAULT 'No',
+    moratorium_months               INT DEFAULT 0,
+    moratorium_from                 DATE,
+    moratorium_end_date             DATE,
+    principal_moratorium            NUMERIC(15,2) DEFAULT 0,
+    interest_moratorium             NUMERIC(15,2) DEFAULT 0,
+    instalment_start_date           DATE,
+    instalment_end_date             DATE,
+    expiry_date                     DATE,
     CONSTRAINT pk_a003 PRIMARY KEY (application_id),
     CONSTRAINT fk_a003_application_id FOREIGN KEY (application_id) REFERENCES a001 (id) ON DELETE CASCADE
 );
@@ -559,6 +585,101 @@ CREATE TABLE IF NOT EXISTS a005 (
     monthly_amount                  NUMERIC(15,2),
     CONSTRAINT fk_a005_loan_application_id FOREIGN KEY (loan_application_id) REFERENCES a001 (id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS a006(
+    id                              BIGSERIAL PRIMARY KEY,
+    application_id                  BIGINT NOT NULL,
+    name_type                       VARCHAR(50) NOT NULL,
+    relation                        VARCHAR(50) NOT NULL,
+    customer_no                     VARCHAR(30) NOT NULL,
+    salutation                      VARCHAR(20),
+    first_name                      VARCHAR(100) NOT NULL,
+    middle_name                     VARCHAR(80),
+    last_name                       VARCHAR(100),
+    CONSTRAINT fk_a006_application_id FOREIGN KEY (application_id) REFERENCES a001 (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS a007(
+    id                              BIGSERIAL PRIMARY KEY,
+    application_id                  BIGINT NOT NULL,
+    installment_number              INT NOT NULL,
+    schedule_month                  VARCHAR(20) NOT NULL,
+    principal_amount                NUMERIC(15,2) NOT NULL,
+    installment_amount              NUMERIC(15,2) NOT NULL,
+    interest_component              NUMERIC(15,2) NOT NULL,
+    principal_component             NUMERIC(15,2) NOT NULL,
+    balance_amount                  NUMERIC(15,2) NOT NULL,
+    is_active                       BOOLEAN NOT NULL DEFAULT TRUE,
+    CONSTRAINT fk_a007_application_id FOREIGN KEY (application_id) REFERENCES a001 (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS a008 (
+    id                              BIGSERIAL PRIMARY KEY,
+    application_id                  BIGINT NOT NULL,
+    security_id                     VARCHAR(50),
+    security_type                   VARCHAR(50) NOT NULL,
+    security_effective_date         DATE,
+    asset_type                      VARCHAR(100),
+    security_amount                 NUMERIC(15,2),
+    margin_percent                  NUMERIC(8,4),
+    asset_address                   VARCHAR(255),
+    asset_address_line2             VARCHAR(255),
+    city                            VARCHAR(100),
+    state                           VARCHAR(100),
+    pincode                         VARCHAR(10),
+    valuation_amount                NUMERIC(15,2),
+    valuer_name                     VARCHAR(150),
+    valuation_date                  DATE,
+    inspection_by                   VARCHAR(150),
+    inspection_date                 DATE,
+    inspection_report_name          VARCHAR(200),
+    security_value                  NUMERIC(15,2),
+    CONSTRAINT fk_a008_application_id FOREIGN KEY (application_id) REFERENCES a001 (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS a009 (
+    id                              BIGSERIAL PRIMARY KEY,
+    application_id                  BIGINT NOT NULL,
+    policy_type                     VARCHAR(50),
+    premium_frequency               VARCHAR(50),
+    policy_status                   VARCHAR(30),
+    auto_renew                      VARCHAR(10),
+    premium_amount                  NUMERIC(15,2),
+    policy_number                   VARCHAR(100),
+    sum_assured                     NUMERIC(15,2),
+    insurance_company               VARCHAR(150),
+    issue_date                      DATE,
+    expiry_date                     DATE,
+    CONSTRAINT fk_a009_application_id FOREIGN KEY (application_id) REFERENCES a001 (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS a010 (
+    id                              BIGSERIAL PRIMARY KEY,
+    application_id                  BIGINT NOT NULL,
+    disbursement_mode               VARCHAR(30) NOT NULL,
+    disbursement_account_number     VARCHAR(50) NOT NULL,
+    ifsc_code                       VARCHAR(20) NOT NULL,
+    bank_name                       VARCHAR(150),
+    beneficiary_account_name        VARCHAR(150) NOT NULL,
+    beneficiary_mobile_number       VARCHAR(20) NOT NULL,
+    disbursement_amount             NUMERIC(15,2) NOT NULL,
+    CONSTRAINT fk_a010_application_id FOREIGN KEY (application_id) REFERENCES a001 (id) ON DELETE CASCADE
+);
+
+-- Indexes like old tables
+CREATE INDEX IF NOT EXISTS idx_a001_customer_id ON a001 (customer_id);
+CREATE INDEX IF NOT EXISTS idx_a001_branch_id ON a001 (branch_id);
+CREATE INDEX IF NOT EXISTS idx_a001_product_code ON a001 (product_code);
+CREATE INDEX IF NOT EXISTS idx_a001_created_by ON a001 (created_by);
+CREATE INDEX IF NOT EXISTS idx_a001_updated_by ON a001 (updated_by);
+CREATE INDEX IF NOT EXISTS idx_a004_maker_user_id ON a004 (maker_user_id);
+CREATE INDEX IF NOT EXISTS idx_a004_checker_user_id ON a004 (checker_user_id);
+CREATE INDEX IF NOT EXISTS idx_a005_loan_application_id ON a005 (loan_application_id);
+CREATE INDEX IF NOT EXISTS idx_a006_application_id ON a006 (application_id);
+CREATE INDEX IF NOT EXISTS idx_a007_application_id ON a007 (application_id);
+CREATE INDEX IF NOT EXISTS idx_a008_application_id ON a008 (application_id);
+CREATE INDEX IF NOT EXISTS idx_a009_application_id ON a009 (application_id);
+CREATE INDEX IF NOT EXISTS idx_a010_application_id ON a010 (application_id);
 
 CREATE INDEX idx_r003_permission_id ON r003 (permission_id);
 CREATE INDEX idx_r004_role_id ON r004 (role_id);
@@ -592,16 +713,7 @@ CREATE INDEX idx_c001_submitted_by ON c001 (submitted_by);
 CREATE INDEX idx_m002_lookup_type_code ON m002 (lookup_type_code);
 CREATE INDEX idx_m003_lookup_type_code ON m003 (lookup_type_code);
 CREATE INDEX idx_m003_permission_code ON m003 (permission_code);
-CREATE INDEX idx_a001_customer_id ON a001 (customer_id);
-CREATE INDEX idx_a001_branch_id ON a001 (branch_id);
-CREATE INDEX idx_a001_product_code ON a001 (product_code);
-CREATE INDEX idx_a004_maker_user_id ON a004 (maker_user_id);
-CREATE INDEX idx_a004_checker_user_id ON a004 (checker_user_id);
-CREATE INDEX idx_a005_loan_application_id ON a005 (loan_application_id);
-CREATE INDEX idx_p001_created_by ON p001 (created_by);
-CREATE INDEX idx_p001_updated_by ON p001 (updated_by);
-CREATE INDEX idx_a001_created_by ON a001 (created_by);
-CREATE INDEX idx_a001_updated_by ON a001 (updated_by);
+
 
 CREATE OR REPLACE VIEW v_users AS
 SELECT
@@ -777,6 +889,13 @@ LEFT JOIN p002 ON p002.product_id = p001.id
 LEFT JOIN p003 ON p003.product_id = p001.id
 ;
 
+-- =====================================================================
+-- LOAN APPLICATION VIEWS : a001 to a010
+-- =====================================================================
+
+-- [STRIPPED 71 bytes] v_loan_applications : a001 + a002 + a003 + a004 + b001
+-- One row per application
+-- [STRIPPED 69 bytes]
 CREATE OR REPLACE VIEW v_loan_applications AS
 SELECT
     a001.id,
@@ -786,9 +905,21 @@ SELECT
     b001.code AS branch_code,
     b001.name AS branch_name,
     a001.product_code,
-    a003.applied_amount,
-    a003.interest_rate,
-    a003.tenure_months,
+
+    -- a001 : New columns
+    a001.effective_date,
+    a001.mode_of_operation,
+    a001.last_transaction_date,
+    a001.dpd,
+    a001.purpose_code,
+    a001.priority_sector,
+    a001.priority_sector_code,
+    a001.industry_type,
+    a001.industry_sub_type,
+    a001.physically_challenged,
+    a001.term_code,
+
+    -- a002
     a002.total_monthly_income,
     a002.total_monthly_expenses,
     a002.net_monthly_income,
@@ -797,10 +928,35 @@ SELECT
     a002.collateral_value,
     a002.emi,
     a002.dti_ratio,
+
+    -- a003
+    a003.applied_amount,
+    a003.interest_rate,
+    a003.tenure_months,
     a003.max_eligible_amount,
     a003.eligibility_status,
     a003.sanctioned_amount,
     a003.kyc_status,
+
+    -- a003 : New columns
+    a003.sanctioning_authority,
+    a003.offset_rate,
+    a003.total_interest_rate,
+    a003.emi_applicable,
+    a003.emi_fix_date,
+    a003.emi_type,
+    a003.bullet_payment,
+    a003.moratorium_applicable,
+    a003.moratorium_months,
+    a003.moratorium_from,
+    a003.moratorium_end_date,
+    a003.principal_moratorium,
+    a003.interest_moratorium,
+    a003.instalment_start_date,
+    a003.instalment_end_date,
+    a003.expiry_date,
+
+    -- a004
     a004.maker_user_id,
     a004.checker_user_id,
     a001.status,
@@ -815,6 +971,119 @@ LEFT JOIN a002 ON a002.application_id = a001.id
 LEFT JOIN a003 ON a003.application_id = a001.id
 LEFT JOIN a004 ON a004.application_id = a001.id
 LEFT JOIN b001 ON b001.id = a001.branch_id
+;
+
+-- [STRIPPED 71 bytes] a005 : Income / Expense
+-- [STRIPPED 75 bytes] OR REPLACE VIEW v_loan_application_income_expense AS
+SELECT
+    a005.id,
+    a005.loan_application_id AS application_id,
+    a001.application_number,
+    a005.item_type,
+    a005.source,
+    a005.monthly_amount
+FROM a005
+LEFT JOIN a001 ON a001.id = a005.loan_application_id
+;
+
+-- [STRIPPED 71 bytes] a006 : Related Parties
+-- [STRIPPED 75 bytes] OR REPLACE VIEW v_loan_application_related_parties AS
+SELECT
+    a006.id,
+    a006.application_id,
+    a001.application_number,
+    a006.name_type,
+    a006.relation,
+    a006.customer_no,
+    a006.salutation,
+    a006.first_name,
+    a006.middle_name,
+    a006.last_name
+FROM a006
+LEFT JOIN a001 ON a001.id = a006.application_id
+;
+
+-- [STRIPPED 71 bytes] a007 : Repayment Schedule
+-- [STRIPPED 75 bytes] OR REPLACE VIEW v_loan_application_repayment_schedule AS
+SELECT
+    a007.id,
+    a007.application_id,
+    a001.application_number,
+    a007.installment_number,
+    a007.schedule_month,
+    a007.principal_amount,
+    a007.installment_amount,
+    a007.interest_component,
+    a007.principal_component,
+    a007.balance_amount,
+    a007.is_active
+FROM a007
+LEFT JOIN a001 ON a001.id = a007.application_id
+;
+
+-- [STRIPPED 71 bytes] a008 : Security / Collateral
+-- [STRIPPED 75 bytes] OR REPLACE VIEW v_loan_application_security_collateral AS
+SELECT
+    a008.id,
+    a008.application_id,
+    a001.application_number,
+    a008.security_id,
+    a008.security_type,
+    a008.security_effective_date,
+    a008.asset_type,
+    a008.security_amount,
+    a008.margin_percent,
+    a008.asset_address,
+    a008.asset_address_line2,
+    a008.city,
+    a008.state,
+    a008.pincode,
+    a008.valuation_amount,
+    a008.valuer_name,
+    a008.valuation_date,
+    a008.inspection_by,
+    a008.inspection_date,
+    a008.inspection_report_name,
+    a008.security_value
+FROM a008
+LEFT JOIN a001 ON a001.id = a008.application_id
+;
+
+-- [STRIPPED 71 bytes] a009 : Insurance
+-- [STRIPPED 75 bytes] OR REPLACE VIEW v_loan_application_insurance AS
+SELECT
+    a009.id,
+    a009.application_id,
+    a001.application_number,
+    a009.policy_type,
+    a009.premium_frequency,
+    a009.policy_status,
+    a009.auto_renew,
+    a009.premium_amount,
+    a009.policy_number,
+    a009.sum_assured,
+    a009.insurance_company,
+    a009.issue_date,
+    a009.expiry_date
+FROM a009
+LEFT JOIN a001 ON a001.id = a009.application_id
+;
+
+-- [STRIPPED 71 bytes] a010 : Disbursement
+-- [STRIPPED 75 bytes] OR REPLACE VIEW v_loan_application_disbursement AS
+SELECT
+    a010.id,
+    a010.application_id,
+    a001.application_number,
+    a010.disbursement_mode,
+    a010.disbursement_account_number,
+    a010.ifsc_code,
+    a010.bank_name,
+    a010.beneficiary_account_name,
+    a010.beneficiary_mobile_number,
+    a010.disbursement_amount
+FROM a010
+LEFT JOIN a001 ON a001.id = a010.application_id
 ;
 
 -- =====================================================================
@@ -1795,68 +2064,84 @@ LEFT JOIN m002 m_risk ON m_risk.id = c010.risk_category_lookup_id;
 -- ---------------------------------------------------------------------
 -- ALTER TABLE m002 ADD CONSTRAINT uq_m002_lookup_sub UNIQUE (lookup_type_code, sub_type_code);
 -- =============================================================================
--- Migration: Rule Engine Module Table, Indexes & View
--- Database: Target Bank Tenant Database (e.g., bank_sbi001)
--- Module: Rule Engine
--- Table: e001
--- View: v_rule_engine
--- =============================================================================
-
--- =============================================================================
--- Table: e001 (Configurable Business Rules)
+-- RULE ENGINE (loan eligibility rules) and LOAN ELIGIBILITY
+--
+-- The Rule Engine screen's dropdowns come from Lookup Master (m001 / m002):
+--   "Rule Parameter" : Check            (FOIR, Debt to Income (DTI), Loan-to-Value (LTV),
+--                                         CIBIL Score, Age, EMI Bounce, Firm Registration ...)
+--   "Rule Operator"  : When value is    (Below, Between, Above, Is)
+--   "Rule Decision"  : Then             (Allow, Override, Reject)
+-- A parameter whose name is also a lookup (e.g. "Firm Registration" with
+-- Registered / Not Registered) is a choice parameter; its rules use "Is".
+--
+-- e001 : rules  "If <parameter> <operator> <value / from-to / choice> then <decision>"
+--        Override adds rate_offset % to the interest rate.
+--        Rules of the same parameter must not overlap (checked by the API).
+--        A rule applies while status = 'ACTIVE' and effective_date <= today.
+-- e002 : every eligibility check (inputs, FOIR / DTI / LTV, decision).
+-- e003 : result of every rule checked in an eligibility check (audit copy).
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS e001 (
     id                      BIGSERIAL PRIMARY KEY,
-    status                  VARCHAR(20) NOT NULL DEFAULT 'active',
-    param                   VARCHAR(100) NOT NULL,
-    comparison_operator     VARCHAR(50) NOT NULL,
-    from_value              VARCHAR(100),
-    to_value                VARCHAR(100),
-    val                     VARCHAR(100),
-    action_on_match         VARCHAR(50) NOT NULL,
-    execution_offset        INT NOT NULL DEFAULT 0,
-    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    param_lookup_id         BIGINT NOT NULL,
+    operator_lookup_id      BIGINT NOT NULL,
+    decision_lookup_id      BIGINT NOT NULL,
+    from_value              NUMERIC(12,2),
+    to_value                NUMERIC(12,2),
+    val                     NUMERIC(12,2),
+    value_lookup_id         BIGINT,
+    rate_offset             NUMERIC(5,2) NOT NULL DEFAULT 0,
+    message                 VARCHAR(255),
+    status                  VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    effective_date          DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at              TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at              TIMESTAMP,
     created_by              BIGINT,
     updated_by              BIGINT,
-
-    CONSTRAINT chk_e001_status
-        CHECK (status IN ('active', 'inactive')),
-
-    CONSTRAINT chk_e001_offset
-        CHECK (execution_offset >= 0)
+    CONSTRAINT fk_e001_param_lookup FOREIGN KEY (param_lookup_id) REFERENCES m002 (id),
+    CONSTRAINT fk_e001_operator_lookup FOREIGN KEY (operator_lookup_id) REFERENCES m002 (id),
+    CONSTRAINT fk_e001_decision_lookup FOREIGN KEY (decision_lookup_id) REFERENCES m002 (id),
+    CONSTRAINT fk_e001_value_lookup FOREIGN KEY (value_lookup_id) REFERENCES m002 (id),
+    CONSTRAINT fk_e001_created_by FOREIGN KEY (created_by) REFERENCES u001 (id),
+    CONSTRAINT fk_e001_updated_by FOREIGN KEY (updated_by) REFERENCES u001 (id),
+    CONSTRAINT chk_e001_status CHECK (status IN ('ACTIVE', 'INACTIVE')),
+    CONSTRAINT chk_e001_rate_offset CHECK (rate_offset >= 0 AND rate_offset <= 100),
+    CONSTRAINT chk_e001_values CHECK (
+        value_lookup_id IS NOT NULL
+        OR val IS NOT NULL
+        OR (from_value IS NOT NULL AND to_value IS NOT NULL AND from_value <= to_value)
+    )
 );
+COMMENT ON TABLE e001 IS 'Loan eligibility rules. param / operator / decision are Lookup Master values (m002). Numeric rules use val or from_value..to_value (inclusive); choice rules use value_lookup_id. Override adds rate_offset % to the interest rate.';
 
--- =============================================================================
--- Indexes for Rule Retrieval and Evaluation
--- =============================================================================
-
-CREATE INDEX IF NOT EXISTS idx_e001_param
-    ON e001 (param);
-
-CREATE INDEX IF NOT EXISTS idx_e001_status
-    ON e001 (status);
-
-CREATE INDEX IF NOT EXISTS idx_e001_offset
-    ON e001 (execution_offset);
-
--- =============================================================================
--- View: v_rule_engine
--- Description: Displays rule details along with creator and updater information
--- =============================================================================
+CREATE INDEX IF NOT EXISTS idx_e001_status_effective_date ON e001 (status, effective_date);
+CREATE INDEX IF NOT EXISTS idx_e001_param_lookup_id ON e001 (param_lookup_id);
+CREATE INDEX IF NOT EXISTS idx_e001_operator_lookup_id ON e001 (operator_lookup_id);
+CREATE INDEX IF NOT EXISTS idx_e001_decision_lookup_id ON e001 (decision_lookup_id);
+CREATE INDEX IF NOT EXISTS idx_e001_value_lookup_id ON e001 (value_lookup_id);
+CREATE INDEX IF NOT EXISTS idx_e001_created_by ON e001 (created_by);
+CREATE INDEX IF NOT EXISTS idx_e001_updated_by ON e001 (updated_by);
 
 CREATE OR REPLACE VIEW v_rule_engine AS
 SELECT
     re.id,
-    re.status,
-    re.param,
-    re.comparison_operator,
+    re.param_lookup_id,
+    p.sub_type_code AS param_code,
+    p.sub_type_description AS param_name,
+    re.operator_lookup_id,
+    o.sub_type_description AS operator_name,
     re.from_value,
     re.to_value,
     re.val,
-    re.action_on_match,
-    re.execution_offset,
+    re.value_lookup_id,
+    v.sub_type_description AS value_name,
+    re.decision_lookup_id,
+    d.sub_type_description AS decision_name,
+    re.rate_offset,
+    re.message,
+    re.status,
+    re.effective_date,
     re.created_at,
     re.updated_at,
     re.created_by,
@@ -1864,13 +2149,80 @@ SELECT
     re.updated_by,
     updater.username AS updated_by_username
 FROM e001 re
-LEFT JOIN u001 creator
-    ON creator.id = re.created_by
-LEFT JOIN u001 updater
-    ON updater.id = re.updated_by;
+JOIN m002 p ON p.id = re.param_lookup_id
+JOIN m002 o ON o.id = re.operator_lookup_id
+JOIN m002 d ON d.id = re.decision_lookup_id
+LEFT JOIN m002 v ON v.id = re.value_lookup_id
+LEFT JOIN u001 creator ON creator.id = re.created_by
+LEFT JOIN u001 updater ON updater.id = re.updated_by;
+
+-- -----------------------------------------------------------------------------
+-- e002 : loan eligibility checks (fields of the Loan Eligibility screen)
+-- lead_id is text without a foreign key: checks can be run for leads that are
+-- not saved in l001 yet.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS e002 (
+    id                          BIGSERIAL PRIMARY KEY,
+    lead_id                     VARCHAR(50),
+    applicant_name              VARCHAR(150),
+    product_name                VARCHAR(100),
+    requested_amount            NUMERIC(15,2) NOT NULL,
+    annual_interest_rate        NUMERIC(6,2) NOT NULL,
+    tenure_months               INT NOT NULL,
+    security_value              NUMERIC(15,2),
+    existing_monthly_debt       NUMERIC(15,2) NOT NULL DEFAULT 0,
+    total_income                NUMERIC(15,2),
+    total_expenses              NUMERIC(15,2),
+    net_income                  NUMERIC(15,2),
+    cibil_score                 INT,
+    proposed_emi                NUMERIC(15,2),
+    foir                        NUMERIC(8,2),
+    dti                         NUMERIC(8,2),
+    ltv                         NUMERIC(8,2),
+    decision                    VARCHAR(20) NOT NULL,
+    eligible_amount             NUMERIC(15,2),
+    rate_offset                 NUMERIC(5,2),
+    final_interest_rate         NUMERIC(6,2),
+    eligible_emi                NUMERIC(15,2),
+    reasons                     TEXT,
+    request_snapshot            TEXT,
+    created_by                  BIGINT,
+    created_at                  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_e002_created_by FOREIGN KEY (created_by) REFERENCES u001 (id),
+    CONSTRAINT chk_e002_decision CHECK (decision IN ('ELIGIBLE', 'REFER_FOR_REVIEW', 'NOT_ELIGIBLE'))
+);
+COMMENT ON TABLE e002 IS 'Loan eligibility checks: screen inputs, FOIR / DTI / LTV, decision, eligible amount and rate. request_snapshot = request as JSON; reasons = one per line.';
+
+CREATE INDEX IF NOT EXISTS idx_e002_lead_id_created_at ON e002 (lead_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_e002_created_at ON e002 (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_e002_created_by ON e002 (created_by);
+
+-- -----------------------------------------------------------------------------
+-- e003 : each rule checked during an eligibility check. The rule is copied as
+-- text, so editing / deleting a rule or lookup later does not change the audit.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS e003 (
+    id                      BIGSERIAL PRIMARY KEY,
+    assessment_id           BIGINT NOT NULL,
+    rule_id                 BIGINT,
+    param_name              VARCHAR(100) NOT NULL,
+    rule_text               VARCHAR(255) NOT NULL,
+    decision_name           VARCHAR(50) NOT NULL,
+    rate_offset             NUMERIC(5,2),
+    actual_value            VARCHAR(100),
+    result                  VARCHAR(20) NOT NULL,
+    message                 VARCHAR(255),
+    CONSTRAINT fk_e003_assessment_id FOREIGN KEY (assessment_id) REFERENCES e002 (id) ON DELETE CASCADE,
+    CONSTRAINT fk_e003_rule_id FOREIGN KEY (rule_id) REFERENCES e001 (id) ON DELETE SET NULL,
+    CONSTRAINT chk_e003_result CHECK (result IN ('ALLOWED', 'OVERRIDDEN', 'REFERRED', 'REJECTED', 'NOT_MATCHED', 'NOT_APPLICABLE'))
+);
+COMMENT ON TABLE e003 IS 'Rules checked in an eligibility check. result: ALLOWED / OVERRIDDEN / REFERRED / REJECTED (rule matched with that decision), NOT_MATCHED (value outside the rule), NOT_APPLICABLE (no value, e.g. LTV without security).';
+
+CREATE INDEX IF NOT EXISTS idx_e003_assessment_id ON e003 (assessment_id);
+CREATE INDEX IF NOT EXISTS idx_e003_rule_id ON e003 (rule_id);
 
 -- =============================================================================
--- End of Rule Engine Module
+-- End of Rule Engine and Loan Eligibility
 -- =============================================================================
 
 

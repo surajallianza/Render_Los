@@ -1,24 +1,16 @@
 package com.los.bank.rule.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.persistence.*;
+import lombok.*;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * Entity representing a configurable business rule in the Rule Engine module.
- * Mapped to table 'e001' in the bank tenant schema.
+ * Loan eligibility rule (table e001). Parameter, operator and decision are Lookup Master
+ * values (m002 ids). Numeric rules use {@link #val} or {@link #fromValue}..{@link #toValue};
+ * choice rules (e.g. Firm Registration is Registered) use {@link #valueLookupId}.
  */
 @Entity
 @Table(name = "e001")
@@ -29,36 +21,50 @@ import java.time.LocalDateTime;
 @Builder
 public class Rule {
 
+    public static final String ACTIVE = "ACTIVE";
+    public static final String INACTIVE = "INACTIVE";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id")
     private Long id;
 
+    @Column(name = "param_lookup_id", nullable = false)
+    private Long paramLookupId;
+
+    @Column(name = "operator_lookup_id", nullable = false)
+    private Long operatorLookupId;
+
+    @Column(name = "decision_lookup_id", nullable = false)
+    private Long decisionLookupId;
+
+    @Column(name = "from_value", precision = 12, scale = 2)
+    private BigDecimal fromValue;
+
+    @Column(name = "to_value", precision = 12, scale = 2)
+    private BigDecimal toValue;
+
+    @Column(name = "val", precision = 12, scale = 2)
+    private BigDecimal val;
+
+    @Column(name = "value_lookup_id")
+    private Long valueLookupId;
+
+    /** Added to the interest rate when the decision is Override. */
+    @Column(name = "rate_offset", precision = 5, scale = 2, nullable = false)
+    @Builder.Default
+    private BigDecimal rateOffset = BigDecimal.ZERO;
+
+    @Column(name = "message", length = 255)
+    private String message;
+
     @Column(name = "status", length = 20, nullable = false)
-    private String status;
+    @Builder.Default
+    private String status = ACTIVE;
 
-    @Column(name = "param", length = 100, nullable = false)
-    private String param;
+    @Column(name = "effective_date", nullable = false)
+    private LocalDate effectiveDate;
 
-    @Column(name = "comparison_operator", length = 50, nullable = false)
-    private String comparisonOperator;
-
-    @Column(name = "from_value", length = 100)
-    private String fromValue;
-
-    @Column(name = "to_value", length = 100)
-    private String toValue;
-
-    @Column(name = "val", length = 100)
-    private String val;
-
-    @Column(name = "action_on_match", length = 50, nullable = false)
-    private String actionOnMatch;
-
-    @Column(name = "execution_offset", nullable = false)
-    private Integer executionOffset;
-
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at")
@@ -71,20 +77,15 @@ public class Rule {
     private Long updatedBy;
 
     @PrePersist
-    public void prePersist() {
+    void prePersist() {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }
-        if (executionOffset == null) {
-            executionOffset = 0;
+        if (effectiveDate == null) {
+            effectiveDate = LocalDate.now();
         }
-        if (status == null || status.trim().isEmpty()) {
-            status = "active";
+        if (rateOffset == null) {
+            rateOffset = BigDecimal.ZERO;
         }
-    }
-
-    @PreUpdate
-    public void preUpdate() {
-        updatedAt = LocalDateTime.now();
     }
 }

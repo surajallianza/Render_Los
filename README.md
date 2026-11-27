@@ -24,22 +24,3 @@ CUSTOMER_DOCUMENTS_PATH=uploads           # relative to the folder the app is st
 
 The database stores only paths relative to this folder, so the folder can be moved
 (copy the files across and point `CUSTOMER_DOCUMENTS_PATH` at the new place).
-
-## Deploy on Render with Docker
-
-Create a **Web Service** on Render, select **Docker** as the runtime, and deploy
-from the repository root. Render will build the included `Dockerfile`; the
-application listens on Render's `PORT` environment variable.
-
-Set the application's configuration in Render's Environment dashboard, not in
-the Dockerfile. Configure the required database connection variables
-(`SETUP_DB_URL`, `SETUP_DB_USERNAME`, `SETUP_DB_PASSWORD`, and, if using a
-separate bank database, `BANK_DB_URL`, `BANK_DB_USERNAME`, and
-`BANK_DB_PASSWORD`). The URLs must use JDBC format, for example
-`jdbc:postgresql://<host>:5432/<database>`. Also configure the customer
-encryption secrets required by your active Spring profile
-(`CUSTOMER_MASTER_SECRET`, `CUSTOMER_AES_SECRET`, and `CUSTOMER_HMAC_SECRET`).
-
-The container filesystem is ephemeral. If customer document uploads must
-survive deploys and restarts, attach a Render persistent disk and set
-`CUSTOMER_DOCUMENTS_PATH` to its mount path.

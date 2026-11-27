@@ -113,6 +113,7 @@ public class DatabaseConfig {
         "com.los.bank.goldrate.repository",
         "com.los.bank.rule.repository",
         "com.los.bank.interestrate.repository",
+        "com.los.bank.loanEligibility.repository",
         "com.los.bank.bankmaster.repository"
     }, entityManagerFactoryRef = "bankEntityManagerFactory", transactionManagerRef = "bankTransactionManager")
     public static class BankJpaConfiguration {
@@ -132,6 +133,7 @@ public class DatabaseConfig {
                     "com.los.bank.goldrate.entity",
                     "com.los.bank.rule.entity",
                     "com.los.bank.interestrate.entity",
+                    "com.los.bank.loanEligibility.entity",
                     "com.los.bank.bankmaster.entity");
 
             HibernateJpaVendorAdapter vendorAdapter = new HibernateJpaVendorAdapter();

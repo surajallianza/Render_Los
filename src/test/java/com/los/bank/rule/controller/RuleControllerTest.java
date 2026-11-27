@@ -1,6 +1,6 @@
 package com.los.bank.rule.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.los.bank.rule.dto.RuleOptionsDto;
 import com.los.bank.rule.dto.RuleRequestDto;
 import com.los.bank.rule.dto.RuleResponseDto;
 import com.los.bank.rule.exception.RuleExceptionHandler;
@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -18,17 +19,15 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.HashMap;
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -43,149 +42,95 @@ class RuleControllerTest {
     @InjectMocks
     private RuleController ruleController;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    private RuleResponseDto sampleResponseDto;
-    private RuleRequestDto sampleRequestDto;
+    private RuleResponseDto sample;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(ruleController)
                 .setControllerAdvice(new RuleExceptionHandler())
                 .build();
-
-        sampleRequestDto = RuleRequestDto.builder()
-                .status("active")
-                .param("CIBIL Score")
-                .comparisonOperator("between")
-                .from("110")
-                .to("250")
-                .value(null)
-                .actionOnMatch("Allow")
-                .offset(0)
-                .build();
-
-        sampleResponseDto = RuleResponseDto.builder()
-                .id(1L)
-                .status("active")
-                .param("CIBIL Score")
-                .comparisonOperator("between")
-                .from("110")
-                .to("250")
-                .value(null)
-                .actionOnMatch("Allow")
-                .offset(0)
-                .createdAt(LocalDateTime.of(2026, 11, 21, 10, 0, 0))
-                .build();
+        sample = RuleResponseDto.builder().id(1L).param("FOIR").op("gt").a("50").decision("Reject").active(true)
+                .description("If FOIR is above 50%, reject the application.").build();
     }
 
     @Test
-    @DisplayName("POST /api/rules creates rule and returns 201 CREATED with reference payload")
-    void testCreateRule_Success() throws Exception {
-        when(ruleService.createRule(any(RuleRequestDto.class))).thenReturn(sampleResponseDto);
+    @DisplayName("GET /api/rules/options returns the dropdown values")
+    void testOptions() throws Exception {
+        when(ruleService.getOptions()).thenReturn(RuleOptionsDto.builder()
+                .parameters(List.of(RuleOptionsDto.Parameter.builder().code("1002001").name("FOIR").metric("FOIR").build()))
+                .operators(List.of()).decisions(List.of()).build());
 
-        mockMvc.perform(post("/api/rules")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(sampleRequestDto)))
+        mockMvc.perform(get("/api/rules/options"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.parameters[0].name").value("FOIR"));
+    }
+
+    @Test
+    @DisplayName("POST accepts the Rule Engine screen payload (param, op, a, b, decision, offset, active)")
+    void testCreateWithScreenPayload() throws Exception {
+        when(ruleService.createRule(any(RuleRequestDto.class), any())).thenReturn(sample);
+
+        mockMvc.perform(post("/api/rules").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"param\":\"CIBIL Score\",\"op\":\"between\",\"a\":401,\"b\":500,\"decision\":\"Override\","
+                                + "\"offset\":4,\"active\":true,\"effectiveDate\":\"2030-01-01\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Rule created successfully"))
                 .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.data.param").value("CIBIL Score"))
-                .andExpect(jsonPath("$.data.comparisonOperator").value("between"))
-                .andExpect(jsonPath("$.data.from").value("110"))
-                .andExpect(jsonPath("$.data.to").value("250"))
-                .andExpect(jsonPath("$.data.actionOnMatch").value("Allow"))
-                .andExpect(jsonPath("$.data.offset").value(0));
+                .andExpect(jsonPath("$.data.description").value("If FOIR is above 50%, reject the application."));
+
+        ArgumentCaptor<RuleRequestDto> captor = ArgumentCaptor.forClass(RuleRequestDto.class);
+        verify(ruleService).createRule(captor.capture(), any());
+        RuleRequestDto sent = captor.getValue();
+        assertEquals("CIBIL Score", sent.getParam());
+        assertEquals("between", sent.getOp());
+        assertEquals("401", sent.getA());
+        assertEquals("500", sent.getB());
+        assertEquals("Override", sent.getDecision());
+        assertEquals(0, new BigDecimal("4").compareTo(sent.getOffset()));
+        assertEquals(Boolean.TRUE, sent.getActive());
     }
 
     @Test
-    @DisplayName("POST /api/rules returns 400 BAD REQUEST when validation fails")
-    void testCreateRule_ValidationFailure() throws Exception {
-        when(ruleService.createRule(any(RuleRequestDto.class)))
-                .thenThrow(new RuleValidationException("Lower boundary ('from') cannot be greater than upper boundary ('to')"));
+    @DisplayName("Validation errors come back as 400 with field errors")
+    void testValidationError() throws Exception {
+        when(ruleService.createRule(any(RuleRequestDto.class), any()))
+                .thenThrow(new RuleValidationException("Rule validation failed", Map.of("param", "'X' is not an active value")));
 
-        mockMvc.perform(post("/api/rules")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(sampleRequestDto)))
+        mockMvc.perform(post("/api/rules").contentType(MediaType.APPLICATION_JSON).content("{\"param\":\"X\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("Lower boundary ('from') cannot be greater than upper boundary ('to')"));
+                .andExpect(jsonPath("$.errors.param").value("'X' is not an active value"));
     }
 
     @Test
-    @DisplayName("GET /api/rules returns 200 OK with paginated list")
-    void testGetAllRules_Success() throws Exception {
-        Map<String, Object> mockResult = new HashMap<>();
-        mockResult.put("success", true);
-        mockResult.put("totalElements", 1L);
-        mockResult.put("totalPages", 1);
-        mockResult.put("currentPage", 0);
-        mockResult.put("pageSize", 10);
-        mockResult.put("data", Collections.singletonList(sampleResponseDto));
+    @DisplayName("GET /api/rules passes the filters; GET /{id} 404 for unknown")
+    void testListAndNotFound() throws Exception {
+        Map<String, Object> page = new LinkedHashMap<>();
+        page.put("success", true);
+        page.put("totalElements", 1);
+        page.put("data", List.of(sample));
+        when(ruleService.getAllRules(0, 100, "ACTIVE", "FOIR", "Reject")).thenReturn(page);
+        when(ruleService.getRuleById(99L)).thenThrow(new RuleNotFoundException("Rule not found with id: 99"));
 
-        when(ruleService.getAllRules(0, 10, null, null)).thenReturn(mockResult);
-
-        mockMvc.perform(get("/api/rules"))
+        mockMvc.perform(get("/api/rules").param("status", "ACTIVE").param("param", "FOIR").param("decision", "Reject"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.totalElements").value(1))
-                .andExpect(jsonPath("$.data[0].param").value("CIBIL Score"))
-                .andExpect(jsonPath("$.data[0].from").value("110"))
-                .andExpect(jsonPath("$.data[0].to").value("250"));
+                .andExpect(jsonPath("$.data[0].op").value("gt"));
+        mockMvc.perform(get("/api/rules/99"))
+                .andExpect(status().isNotFound());
     }
 
     @Test
-    @DisplayName("GET /api/rules/{id} returns 200 OK when rule exists")
-    void testGetRuleById_Success() throws Exception {
-        when(ruleService.getRuleById(1L)).thenReturn(sampleResponseDto);
+    @DisplayName("PUT, PATCH status and DELETE")
+    void testUpdateStatusDelete() throws Exception {
+        when(ruleService.updateRule(eq(1L), any(RuleRequestDto.class), any())).thenReturn(sample);
+        when(ruleService.changeStatus(eq(1L), eq("INACTIVE"), any())).thenReturn(sample);
 
-        mockMvc.perform(get("/api/rules/1"))
+        mockMvc.perform(put("/api/rule-engine/1").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"param\":\"FOIR\",\"op\":\"gt\",\"a\":55,\"decision\":\"Reject\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(patch("/api/rules/1/status").contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"INACTIVE\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/rules/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.id").value(1))
-                .andExpect(jsonPath("$.data.param").value("CIBIL Score"))
-                .andExpect(jsonPath("$.data.from").value("110"))
-                .andExpect(jsonPath("$.data.to").value("250"))
-                .andExpect(jsonPath("$.data.actionOnMatch").value("Allow"));
-    }
-
-    @Test
-    @DisplayName("GET /api/rules/{id} returns 404 NOT FOUND when rule does not exist")
-    void testGetRuleById_NotFound() throws Exception {
-        when(ruleService.getRuleById(999L)).thenThrow(new RuleNotFoundException("Rule not found with id: 999"));
-
-        mockMvc.perform(get("/api/rules/999"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("Rule not found with id: 999"));
-    }
-
-    @Test
-    @DisplayName("PUT /api/rules/{id} returns 200 OK when update succeeds")
-    void testUpdateRule_Success() throws Exception {
-        when(ruleService.updateRule(eq(1L), any(RuleRequestDto.class))).thenReturn(sampleResponseDto);
-
-        mockMvc.perform(put("/api/rules/1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(sampleRequestDto)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Rule updated successfully"))
-                .andExpect(jsonPath("$.data.id").value(1));
-    }
-
-    @Test
-    @DisplayName("PUT /api/rules/{id} returns 404 NOT FOUND when updating nonexistent rule")
-    void testUpdateRule_NotFound() throws Exception {
-        when(ruleService.updateRule(eq(999L), any(RuleRequestDto.class)))
-                .thenThrow(new RuleNotFoundException("Rule not found with id: 999"));
-
-        mockMvc.perform(put("/api/rules/999")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(sampleRequestDto)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("Rule not found with id: 999"));
+                .andExpect(jsonPath("$.message").value("Rule removed"));
+        verify(ruleService).deleteRule(1L);
     }
 }
