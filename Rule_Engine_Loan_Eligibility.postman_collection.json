@@ -1,0 +1,2234 @@
+{
+  "info": {
+    "_postman_id": "e4a7c2d1-6b3f-4f0e-8a1d-5c9e2b7f4a61",
+    "name": "LOS - Rule Engine & Loan Eligibility API",
+    "description": "Rule Engine (dropdowns from Lookup Master) and Loan Eligibility.\n\nRun order: 0. Authentication -> 1. One-time lookup setup (once per bank) -> 2. Rule Engine 2-7 -> 3. Loan Eligibility.\n\nVariables: baseUrl, bankCode (e.g. ABC001), today (yyyy-MM-dd).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "bankCode",
+      "value": "ABC001",
+      "type": "string"
+    },
+    {
+      "key": "tempToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "today",
+      "value": "2026-11-26",
+      "type": "string"
+    },
+    {
+      "key": "cibilRejectRuleId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "cibilOverrideRuleId",
+      "value": "2",
+      "type": "string"
+    },
+    {
+      "key": "foirRuleId",
+      "value": "3",
+      "type": "string"
+    },
+    {
+      "key": "dtiRuleId",
+      "value": "4",
+      "type": "string"
+    },
+    {
+      "key": "ltvRuleId",
+      "value": "5",
+      "type": "string"
+    },
+    {
+      "key": "firmRuleId",
+      "value": "6",
+      "type": "string"
+    },
+    {
+      "key": "assessmentId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "0. Authentication",
+      "item": [
+        {
+          "name": "1. Staff Login (Phase 1)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.tempToken) {",
+                  "        pm.collectionVariables.set(\"tempToken\", json.data.tempToken);",
+                  "        console.log(\"Saved tempToken to collection variable!\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@bank.com\",\n  \"password\": \"Admin@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Internal staff login. Dispatches 2FA OTP and automatically stores tempToken."
+          }
+        },
+        {
+          "name": "2. Verify 2FA OTP (Phase 2)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.data && json.data.accessToken) {",
+                  "        pm.collectionVariables.set(\"authToken\", json.data.accessToken);",
+                  "        console.log(\"Saved authToken to collection variable!\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@bank.com\",\n  \"tempToken\": \"{{tempToken}}\",\n  \"otp\": \"<paste_6_digit_otp_from_server_log>\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/verify-otp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "verify-otp"
+              ]
+            },
+            "description": "Submits 2FA OTP and automatically stores accessToken in collection variable {{authToken}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. One-time setup: Rule Engine lookups",
+      "description": "The Rule Engine screen's dropdowns come from Lookup Master. Run this folder once per bank (logged in), or create the same lookups on the Lookup Management screen.\n\n- Rule Parameter (Check)\n- Rule Operator (When value is)\n- Rule Decision (Then)\n- Firm Registration (options of the Firm Registration choice parameter)\n\nCodes 10020-10023 are examples; any free codes work. The backend finds the lookups by name (configurable: app.rule-engine.lookups.parameter / operator / decision) and understands each value by its name (Below / Above / Between / Is, Allow / Override / Reject, FOIR / DTI / LTV / CIBIL).",
+      "item": [
+        {
+          "name": "Create lookup: Rule Parameter (10020)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups"
+              ]
+            },
+            "description": "Check dropdown. FOIR, Debt to Income (DTI), Loan-to-Value (LTV) and CIBIL Score are calculated by the eligibility check; other parameters are custom (value sent in additionalFacts).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"10020\",\n  \"name\": \"Rule Parameter\",\n  \"description\": \"Rule Parameter\",\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Parameter -> FOIR",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10020/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10020",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002001 under Rule Parameter.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002001\",\n  \"name\": \"FOIR\",\n  \"description\": \"FOIR\",\n  \"display_order\": 1,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Parameter -> Debt to Income (DTI)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10020/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10020",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002002 under Rule Parameter.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002002\",\n  \"name\": \"Debt to Income (DTI)\",\n  \"description\": \"Debt to Income (DTI)\",\n  \"display_order\": 2,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Parameter -> Loan-to-Value (LTV)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10020/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10020",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002003 under Rule Parameter.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002003\",\n  \"name\": \"Loan-to-Value (LTV)\",\n  \"description\": \"Loan-to-Value (LTV)\",\n  \"display_order\": 3,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Parameter -> CIBIL Score",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10020/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10020",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002004 under Rule Parameter.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002004\",\n  \"name\": \"CIBIL Score\",\n  \"description\": \"CIBIL Score\",\n  \"display_order\": 4,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Parameter -> EMI Bounce",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10020/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10020",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002005 under Rule Parameter.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002005\",\n  \"name\": \"EMI Bounce\",\n  \"description\": \"EMI Bounce\",\n  \"display_order\": 5,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Parameter -> Age",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10020/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10020",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002006 under Rule Parameter.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002006\",\n  \"name\": \"Age\",\n  \"description\": \"Age\",\n  \"display_order\": 6,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Parameter -> Employment Stability (years)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10020/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10020",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002007 under Rule Parameter.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002007\",\n  \"name\": \"Employment Stability (years)\",\n  \"description\": \"Employment Stability (years)\",\n  \"display_order\": 7,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Parameter -> Firm Registration",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10020/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10020",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002008 under Rule Parameter.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002008\",\n  \"name\": \"Firm Registration\",\n  \"description\": \"Firm Registration\",\n  \"display_order\": 8,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create lookup: Rule Operator (10021)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups"
+              ]
+            },
+            "description": "When value is dropdown. Names must mean Below, Between, Above or Is.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"10021\",\n  \"name\": \"Rule Operator\",\n  \"description\": \"Rule Operator\",\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Operator -> Below",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10021/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10021",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002101 under Rule Operator.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002101\",\n  \"name\": \"Below\",\n  \"description\": \"Below\",\n  \"display_order\": 1,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Operator -> Between",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10021/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10021",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002102 under Rule Operator.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002102\",\n  \"name\": \"Between\",\n  \"description\": \"Between\",\n  \"display_order\": 2,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Operator -> Above",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10021/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10021",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002103 under Rule Operator.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002103\",\n  \"name\": \"Above\",\n  \"description\": \"Above\",\n  \"display_order\": 3,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Operator -> Is",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10021/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10021",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002104 under Rule Operator.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002104\",\n  \"name\": \"Is\",\n  \"description\": \"Is\",\n  \"display_order\": 4,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create lookup: Rule Decision (10022)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups"
+              ]
+            },
+            "description": "Then dropdown. Names must mean Allow, Override or Reject (Refer also understood).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"10022\",\n  \"name\": \"Rule Decision\",\n  \"description\": \"Rule Decision\",\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Decision -> Allow",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10022/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10022",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002201 under Rule Decision.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002201\",\n  \"name\": \"Allow\",\n  \"description\": \"Allow\",\n  \"display_order\": 1,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Decision -> Override",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10022/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10022",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002202 under Rule Decision.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002202\",\n  \"name\": \"Override\",\n  \"description\": \"Override\",\n  \"display_order\": 2,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Rule Decision -> Reject",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10022/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10022",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002203 under Rule Decision.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002203\",\n  \"name\": \"Reject\",\n  \"description\": \"Reject\",\n  \"display_order\": 3,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create lookup: Firm Registration (10023)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups"
+              ]
+            },
+            "description": "Options of the Firm Registration choice parameter (a lookup with the same name as a parameter makes it a choice).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"10023\",\n  \"name\": \"Firm Registration\",\n  \"description\": \"Firm Registration\",\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Firm Registration -> Registered",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10023/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10023",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002301 under Firm Registration.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002301\",\n  \"name\": \"Registered\",\n  \"description\": \"Registered\",\n  \"display_order\": 1,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "  Firm Registration -> Not Registered",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lookups/10023/sub-lookups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lookups",
+                "10023",
+                "sub-lookups"
+              ]
+            },
+            "description": "Sub lookup 1002302 under Firm Registration.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sub_lookup_code\": \"1002302\",\n  \"name\": \"Not Registered\",\n  \"description\": \"Not Registered\",\n  \"display_order\": 2,\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Rule Engine",
+      "description": "Rule = Check (param) + When value is (op) + value (a, and b for Between) + Then (decision) [+ Add to rate % (offset) for Override] + effective date.\nparam / op / decision accept the lookup sub code (from GET /options), the lookup name or its id. The screen's short operator codes lt / gt / between / eq work too.\nRules apply from their effective date (default today); no approval. Two active rules of the same parameter may not overlap (400). Between includes both ends; 'Above 50' means more than 50.\nResponses carry the screen's list fields (param, op, a, b, decision, offset, active, effectiveDate) plus full lookup details and a readable description.",
+      "item": [
+        {
+          "name": "1. Get Dropdown Options",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules/options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules",
+                "options"
+              ]
+            },
+            "description": "Check / When value is / Then values from Lookup Master, with each parameter's metric (FOIR, DTI, LTV, CIBIL_SCORE or null) and choice options. Use the codes in the create requests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Create - CIBIL below 650 -> Reject (lookup codes)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules"
+              ]
+            },
+            "description": "Codes as the dropdowns send them: param 1002004 = CIBIL Score, op 1002101 = Below, decision 1002203 = Reject.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"param\": \"1002004\",\n  \"op\": \"1002101\",\n  \"a\": 650,\n  \"decision\": \"1002203\",\n  \"message\": \"CIBIL score must be 650 or more\",\n  \"effectiveDate\": \"{{today}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set(\"cibilRejectRuleId\", pm.response.json().data.id);",
+                  "    console.log(pm.response.json().data.description);",
+                  "}",
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Create - CIBIL 650-700 -> Override +2% (names)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules"
+              ]
+            },
+            "description": "Names work too. Override needs offset (Add to rate %).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"param\": \"CIBIL Score\",\n  \"op\": \"between\",\n  \"a\": 650,\n  \"b\": 700,\n  \"decision\": \"Override\",\n  \"offset\": 2,\n  \"active\": true,\n  \"effectiveDate\": \"{{today}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set(\"cibilOverrideRuleId\", pm.response.json().data.id);",
+                  "    console.log(pm.response.json().data.description);",
+                  "}",
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Create - FOIR above 50% -> Reject",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules"
+              ]
+            },
+            "description": "FOIR = (existing monthly debt + proposed EMI) / (income - expenses) x 100.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"param\": \"FOIR\",\n  \"op\": \"Above\",\n  \"a\": 50,\n  \"decision\": \"Reject\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set(\"foirRuleId\", pm.response.json().data.id);",
+                  "    console.log(pm.response.json().data.description);",
+                  "}",
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Create - DTI above 60% -> Reject",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules"
+              ]
+            },
+            "description": "DTI = (existing monthly debt + proposed EMI) / total income x 100.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"param\": \"Debt to Income (DTI)\",\n  \"op\": \"Above\",\n  \"a\": 60,\n  \"decision\": \"Reject\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set(\"dtiRuleId\", pm.response.json().data.id);",
+                  "    console.log(pm.response.json().data.description);",
+                  "}",
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Create - LTV above 80% -> Reject",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules"
+              ]
+            },
+            "description": "LTV = loan amount / security value x 100; skipped when no security value is given.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"param\": \"Loan-to-Value (LTV)\",\n  \"op\": \"Above\",\n  \"a\": 80,\n  \"decision\": \"Reject\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set(\"ltvRuleId\", pm.response.json().data.id);",
+                  "    console.log(pm.response.json().data.description);",
+                  "}",
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7. Create - Firm Registration is Not Registered -> Override +1% (choice)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules"
+              ]
+            },
+            "description": "Choice parameter: a = option code or name, op defaults to Is. Checked only when the eligibility request sends additionalFacts.\"Firm Registration\".",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"param\": \"Firm Registration\",\n  \"a\": \"Not Registered\",\n  \"decision\": \"Override\",\n  \"offset\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set(\"firmRuleId\", pm.response.json().data.id);",
+                  "    console.log(pm.response.json().data.description);",
+                  "}",
+                  "pm.test(\"Status 201\", function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8. Create - overlapping rule (expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules"
+              ]
+            },
+            "description": "FOIR 45-60 overlaps 'FOIR above 50' -> 400 naming the clashing rule.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"param\": \"FOIR\",\n  \"op\": \"between\",\n  \"a\": 45,\n  \"b\": 60,\n  \"decision\": \"Reject\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9. Create - Override without offset (expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules"
+              ]
+            },
+            "description": "Override needs Add to rate %.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"param\": \"Age\",\n  \"op\": \"Below\",\n  \"a\": 21,\n  \"decision\": \"Override\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. List Rules",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules?status=ACTIVE&page=0&size=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                },
+                {
+                  "key": "param",
+                  "value": "CIBIL Score",
+                  "disabled": true
+                },
+                {
+                  "key": "decision",
+                  "value": "Override",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Filters: status (ACTIVE / INACTIVE), param and decision (code or name)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11. Get Rule",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules/{{foirRuleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules",
+                "{{foirRuleId}}"
+              ]
+            },
+            "description": "One rule."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12. Update Rule (FOIR limit 55%)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules/{{foirRuleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules",
+                "{{foirRuleId}}"
+              ]
+            },
+            "description": "Full update.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"param\": \"FOIR\",\n  \"op\": \"Above\",\n  \"a\": 55,\n  \"decision\": \"Reject\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13. Deactivate Rule",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules/{{foirRuleId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules",
+                "{{foirRuleId}}",
+                "status"
+              ]
+            },
+            "description": "Inactive rules are not checked.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14. Activate Rule",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules/{{foirRuleId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules",
+                "{{foirRuleId}}",
+                "status"
+              ]
+            },
+            "description": "Back on.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15. Remove Rule (DTI rule)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/rules/{{dtiRuleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "rules",
+                "{{dtiRuleId}}"
+              ]
+            },
+            "description": "Deletes the rule (the screen's Remove). Saved eligibility checks keep their copy."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Loan Eligibility",
+      "description": "POST /api/loan-eligibility/assess takes the Loan Eligibility screen's fields and checks them against the active rules.\n\nNet income = income - expenses. FOIR = (existing debt + EMI) / net income. DTI = (existing debt + EMI) / income. LTV = loan / security value (only with a security value). CIBIL as entered.\n\n- No Reject / Refer -> Eligible (requested amount).\n- Refer rule, or only FOIR / DTI / LTV rejected and a lower amount passes -> Refer for Review with eligibleAmount = highest amount that passes (rounded down to Rs 1,000).\n- Otherwise Not Eligible, eligibleAmount 0.\nOverride rules add their offset: finalInterestRate = annualInterestRate + rateOffset; eligibleEmi uses it.\nratios[] gives the Status column (Within limit / Rate +x% / Outside limit / Not applicable / No rule). Rules on custom parameters (Age, Firm Registration ...) use additionalFacts.\n\nRequires login.",
+      "item": [
+        {
+          "name": "1. Home loan, within limits -> Eligible",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/loan-eligibility/assess",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loan-eligibility",
+                "assess"
+              ]
+            },
+            "description": "FOIR ~47%, DTI ~38%, LTV 60%, CIBIL 760.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": \"LEAD1001\",\n  \"applicantName\": \"Rajesh Sharma\",\n  \"productName\": \"Home loan\",\n  \"requestedAmount\": 3000000,\n  \"annualInterestRate\": 9.5,\n  \"tenureMonths\": 240,\n  \"securityValue\": 5000000,\n  \"existingMonthlyDebt\": 10000,\n  \"cibilScore\": 760,\n  \"rows\": [\n    {\n      \"type\": \"Income\",\n      \"source\": \"Salary\",\n      \"amount\": 100000\n    },\n    {\n      \"type\": \"Expense\",\n      \"source\": \"Rent\",\n      \"amount\": 20000\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.assessmentId) { pm.collectionVariables.set(\"assessmentId\", json.data.assessmentId); }",
+                  "pm.test(\"Decision is Eligible\", function () { pm.response.to.have.status(200); pm.expect(json.data.decision).to.eql(\"Eligible\"); });",
+                  "console.log(json.data.decision + \" | eligible \" + json.data.eligibleAmount + \" @ \" + json.data.finalInterestRate + \"% | \" + JSON.stringify(json.data.ratios) + \" | \" + JSON.stringify(json.data.reasons));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. CIBIL 680 -> Eligible with +2% rate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/loan-eligibility/assess",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loan-eligibility",
+                "assess"
+              ]
+            },
+            "description": "Matches the CIBIL 650-700 Override rule: finalInterestRate 11.5.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": \"LEAD1001\",\n  \"applicantName\": \"Rajesh Sharma\",\n  \"productName\": \"Home loan\",\n  \"requestedAmount\": 3000000,\n  \"annualInterestRate\": 9.5,\n  \"tenureMonths\": 240,\n  \"securityValue\": 5000000,\n  \"existingMonthlyDebt\": 10000,\n  \"cibilScore\": 680,\n  \"rows\": [\n    {\n      \"type\": \"Income\",\n      \"source\": \"Salary\",\n      \"amount\": 100000\n    },\n    {\n      \"type\": \"Expense\",\n      \"source\": \"Rent\",\n      \"amount\": 20000\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.assessmentId) { pm.collectionVariables.set(\"assessmentId\", json.data.assessmentId); }",
+                  "pm.test(\"Decision is Eligible\", function () { pm.response.to.have.status(200); pm.expect(json.data.decision).to.eql(\"Eligible\"); });",
+                  "console.log(json.data.decision + \" | eligible \" + json.data.eligibleAmount + \" @ \" + json.data.finalInterestRate + \"% | \" + JSON.stringify(json.data.ratios) + \" | \" + JSON.stringify(json.data.reasons));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. CIBIL 600 -> Not Eligible",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/loan-eligibility/assess",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loan-eligibility",
+                "assess"
+              ]
+            },
+            "description": "CIBIL rule rejects; a smaller amount cannot fix it, so eligibleAmount is 0.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": \"LEAD1001\",\n  \"applicantName\": \"Rajesh Sharma\",\n  \"productName\": \"Home loan\",\n  \"requestedAmount\": 3000000,\n  \"annualInterestRate\": 9.5,\n  \"tenureMonths\": 240,\n  \"securityValue\": 5000000,\n  \"existingMonthlyDebt\": 10000,\n  \"cibilScore\": 600,\n  \"rows\": [\n    {\n      \"type\": \"Income\",\n      \"source\": \"Salary\",\n      \"amount\": 100000\n    },\n    {\n      \"type\": \"Expense\",\n      \"source\": \"Rent\",\n      \"amount\": 20000\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.assessmentId) { pm.collectionVariables.set(\"assessmentId\", json.data.assessmentId); }",
+                  "pm.test(\"Decision is Not Eligible\", function () { pm.response.to.have.status(200); pm.expect(json.data.decision).to.eql(\"Not Eligible\"); });",
+                  "console.log(json.data.decision + \" | eligible \" + json.data.eligibleAmount + \" @ \" + json.data.finalInterestRate + \"% | \" + JSON.stringify(json.data.ratios) + \" | \" + JSON.stringify(json.data.reasons));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. 40 lakh, FOIR above 50% -> Refer for Review (eligible up to Rs X)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/loan-eligibility/assess",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loan-eligibility",
+                "assess"
+              ]
+            },
+            "description": "eligibleAmount = highest amount within the FOIR limit: about Rs 36,47,000 with the 55% limit set by request 2.12 (about Rs 32,18,000 at 50%).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": \"LEAD1001\",\n  \"applicantName\": \"Rajesh Sharma\",\n  \"productName\": \"Home loan\",\n  \"requestedAmount\": 4000000,\n  \"annualInterestRate\": 9.5,\n  \"tenureMonths\": 240,\n  \"securityValue\": 5000000,\n  \"existingMonthlyDebt\": 10000,\n  \"cibilScore\": 760,\n  \"rows\": [\n    {\n      \"type\": \"Income\",\n      \"source\": \"Salary\",\n      \"amount\": 100000\n    },\n    {\n      \"type\": \"Expense\",\n      \"source\": \"Rent\",\n      \"amount\": 20000\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.assessmentId) { pm.collectionVariables.set(\"assessmentId\", json.data.assessmentId); }",
+                  "pm.test(\"Decision is Refer for Review\", function () { pm.response.to.have.status(200); pm.expect(json.data.decision).to.eql(\"Refer for Review\"); });",
+                  "console.log(json.data.decision + \" | eligible \" + json.data.eligibleAmount + \" @ \" + json.data.finalInterestRate + \"% | \" + JSON.stringify(json.data.ratios) + \" | \" + JSON.stringify(json.data.reasons));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Personal loan, no security -> LTV not applicable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/loan-eligibility/assess",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loan-eligibility",
+                "assess"
+              ]
+            },
+            "description": "No securityValue: LTV rules are skipped (warning).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": \"LEAD1002\",\n  \"applicantName\": \"Pooja Verma\",\n  \"productName\": \"Personal loan\",\n  \"requestedAmount\": 300000,\n  \"annualInterestRate\": 13,\n  \"tenureMonths\": 36,\n  \"existingMonthlyDebt\": 0,\n  \"cibilScore\": 720,\n  \"rows\": [\n    {\n      \"type\": \"Income\",\n      \"source\": \"Salary\",\n      \"amount\": 60000\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.assessmentId) { pm.collectionVariables.set(\"assessmentId\", json.data.assessmentId); }",
+                  "pm.test(\"Decision is Eligible\", function () { pm.response.to.have.status(200); pm.expect(json.data.decision).to.eql(\"Eligible\"); });",
+                  "console.log(json.data.decision + \" | eligible \" + json.data.eligibleAmount + \" @ \" + json.data.finalInterestRate + \"% | \" + JSON.stringify(json.data.ratios) + \" | \" + JSON.stringify(json.data.reasons));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. With additionalFacts (Firm Registration) -> +1% rate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/loan-eligibility/assess",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loan-eligibility",
+                "assess"
+              ]
+            },
+            "description": "Values for custom parameters, keyed by parameter name or code: finalInterestRate 10.5 (+1%).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": \"LEAD1001\",\n  \"applicantName\": \"Rajesh Sharma\",\n  \"productName\": \"Home loan\",\n  \"requestedAmount\": 3000000,\n  \"annualInterestRate\": 9.5,\n  \"tenureMonths\": 240,\n  \"securityValue\": 5000000,\n  \"existingMonthlyDebt\": 10000,\n  \"cibilScore\": 760,\n  \"rows\": [\n    {\n      \"type\": \"Income\",\n      \"source\": \"Salary\",\n      \"amount\": 100000\n    },\n    {\n      \"type\": \"Expense\",\n      \"source\": \"Rent\",\n      \"amount\": 20000\n    }\n  ],\n  \"additionalFacts\": {\n    \"Firm Registration\": \"Not Registered\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.assessmentId) { pm.collectionVariables.set(\"assessmentId\", json.data.assessmentId); }",
+                  "pm.test(\"Decision is Eligible\", function () { pm.response.to.have.status(200); pm.expect(json.data.decision).to.eql(\"Eligible\"); });",
+                  "console.log(json.data.decision + \" | eligible \" + json.data.eligibleAmount + \" @ \" + json.data.finalInterestRate + \"% | \" + JSON.stringify(json.data.ratios) + \" | \" + JSON.stringify(json.data.reasons));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7. Current screen payload (snake_case)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/loan-eligibility/assess",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loan-eligibility",
+                "assess"
+              ]
+            },
+            "description": "Exactly what the Loan Eligibility screen sends today (lead_id, income_expenses, security_value, calculated_metrics.existing_monthly_debt ...).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lead_id\": \"LEAD1003\",\n  \"customer_name\": \"Amit Patel\",\n  \"product\": \"Vehicle loan\",\n  \"requested_amount\": 800000,\n  \"annual_interest_rate\": 10.5,\n  \"tenure_months\": 60,\n  \"security_value\": 1000000,\n  \"income_expenses\": [\n    {\n      \"type\": \"income\",\n      \"source\": \"Salary\",\n      \"amount\": 90000\n    },\n    {\n      \"type\": \"expense\",\n      \"source\": \"Household\",\n      \"amount\": 25000\n    }\n  ],\n  \"cibil_score\": 710,\n  \"calculated_metrics\": {\n    \"existing_monthly_debt\": 8000\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.assessmentId) { pm.collectionVariables.set(\"assessmentId\", json.data.assessmentId); }",
+                  "pm.test(\"Decision is Eligible\", function () { pm.response.to.have.status(200); pm.expect(json.data.decision).to.eql(\"Eligible\"); });",
+                  "console.log(json.data.decision + \" | eligible \" + json.data.eligibleAmount + \" @ \" + json.data.finalInterestRate + \"% | \" + JSON.stringify(json.data.ratios) + \" | \" + JSON.stringify(json.data.reasons));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8. Missing fields (expect 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/loan-eligibility/assess",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loan-eligibility",
+                "assess"
+              ]
+            },
+            "description": "Errors per field.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": \"LEAD1004\",\n  \"requestedAmount\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9. Get Saved Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/loan-eligibility/{{assessmentId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loan-eligibility",
+                "{{assessmentId}}"
+              ]
+            },
+            "description": "A saved check with inputs, ratios, decision, rate and the rules as they were then."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. List Checks for a Lead",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Bank-Code",
+                "value": "{{bankCode}}",
+                "description": "Bank code (e.g. ABC001) or bank database name"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/loan-eligibility?leadId=LEAD1001&page=0&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "loan-eligibility"
+              ],
+              "query": [
+                {
+                  "key": "leadId",
+                  "value": "LEAD1001"
+                },
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Saved checks, newest first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
